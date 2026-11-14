@@ -1,6 +1,7 @@
 package com.mibusrioja.app.ui.map
 
 import android.Manifest
+import android.graphics.drawable.Drawable
 import android.content.pm.PackageManager
 import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -168,7 +169,12 @@ fun MapScreen(
 
     // Custom Marker Drawables
     val stopIconDrawable = remember(context) { createStopMarkerDrawable(context) }
-    val busIconDrawable = remember(context) { createBusMarkerDrawable(context) }
+    // Cache de íconos por orientación redondeada a 5° (máx. 72 bitmaps)
+    val busIconCache = remember(context) { mutableMapOf<Int, Drawable>() }
+    fun busIconFor(orientacion: Float): Drawable {
+        val key = (((orientacion % 360f) + 360f) % 360f / 5f).toInt() * 5
+        return busIconCache.getOrPut(key) { createBusMarkerDrawable(context, key.toFloat()) }
+    }
 
     // GPS Location Client
     val fusedLocationClient = remember(context) {
@@ -374,7 +380,7 @@ fun MapScreen(
                         append("%.1f".format(zoomLevel))
                         items.forEach { item ->
                             when (item) {
-                                is BusMapItem.Single -> append("|s:${item.bus.interno}:%.5f:%.5f".format(item.bus.lat, item.bus.lng))
+                                is BusMapItem.Single -> append("|s:${item.bus.interno}:%.5f:%.5f:%.0f".format(item.bus.lat, item.bus.lng, item.bus.orientacion))
                                 is BusMapItem.Cluster -> append("|c:%.5f:%.5f:".format(item.lat, item.lng)).append(item.buses.joinToString(",") { it.interno })
                             }
                         }
@@ -392,9 +398,8 @@ fun MapScreen(
                                     val marker = Marker(mapView).apply {
                                         id = bus.interno
                                         position = GeoPoint(bus.lat, bus.lng)
-                                        rotation = bus.orientacion
                                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                        icon = busIconDrawable
+                                        icon = busIconFor(bus.orientacion)
                                         setOnMarkerClickListener { _, _ ->
                                             viewModel.selectBus(bus.interno)
                                             true

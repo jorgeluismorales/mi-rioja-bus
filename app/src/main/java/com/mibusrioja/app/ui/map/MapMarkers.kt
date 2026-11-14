@@ -8,7 +8,9 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.graphics.Color
+import com.mibusrioja.app.R
 import androidx.compose.ui.graphics.toArgb
 
 /**
@@ -45,64 +47,60 @@ internal fun createStopMarkerDrawable(context: Context): Drawable {
 }
 
 /**
- * Genera dinámicamente un ícono de colectivo en tiempo real con indicador de orientación.
+ * Ícono de colectivo en tiempo real: círculo naranja con el pictograma de bus siempre derecho
+ * y una flecha exterior rotada según [orientacionGrados] (0° = norte, sentido horario).
+ * El marcador no se rota: la orientación queda "horneada" en el bitmap para que el bus sea legible.
  */
-internal fun createBusMarkerDrawable(context: Context): Drawable {
+internal fun createBusMarkerDrawable(context: Context, orientacionGrados: Float): Drawable {
     val density = context.resources.displayMetrics.density
-    val sizePx = (44 * density).toInt()
+    val sizePx = (64 * density).toInt()
     val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     val cx = sizePx / 2f
     val cy = sizePx / 2f
-    val radius = 14f * density
+    val radius = 15f * density
 
-    // Puntero triangular de orientación hacia el norte (rotado luego con bus.orientacion)
-    paint.color = Color(0xFFCC4D1A).toArgb()
-    paint.style = Paint.Style.FILL
-    val pointerPath = Path().apply {
-        moveTo(cx, 2f * density)
-        lineTo(cx - 5f * density, cy - radius + 2f * density)
-        lineTo(cx + 5f * density, cy - radius + 2f * density)
+    // Flecha de dirección (rotada alrededor del centro)
+    canvas.save()
+    canvas.rotate(orientacionGrados, cx, cy)
+    val arrowTip = cy - radius - 14f * density
+    val arrowBase = cy - radius - 3f * density
+    val arrowPath = Path().apply {
+        moveTo(cx, arrowTip)
+        lineTo(cx - 9f * density, arrowBase)
+        lineTo(cx, arrowBase - 3f * density)
+        lineTo(cx + 9f * density, arrowBase)
         close()
     }
-    canvas.drawPath(pointerPath, paint)
+    paint.style = Paint.Style.FILL
+    paint.color = android.graphics.Color.WHITE
+    canvas.drawPath(arrowPath, paint)
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 1.5f * density
+    paint.strokeJoin = Paint.Join.ROUND
+    paint.color = Color(0xFF111827).toArgb()
+    canvas.drawPath(arrowPath, paint)
+    canvas.restore()
 
-    // Borde blanco exterior
+    // Sombra + borde blanco + círculo naranja
+    paint.style = Paint.Style.FILL
+    paint.color = android.graphics.Color.parseColor("#55000000")
+    canvas.drawCircle(cx, cy + 1.5f * density, radius + 2f * density, paint)
     paint.color = android.graphics.Color.WHITE
     canvas.drawCircle(cx, cy, radius + 2f * density, paint)
-
-    // Círculo principal naranja
     paint.color = Color(0xFFFF6B35).toArgb()
     canvas.drawCircle(cx, cy, radius, paint)
 
-    // Silueta de colectivo blanca en el centro
-    paint.color = android.graphics.Color.WHITE
-    val busW = 12f * density
-    val busH = 16f * density
-    val busRect = RectF(
-        cx - busW / 2f,
-        cy - busH / 2f,
-        cx + busW / 2f,
-        cy + busH / 2f
-    )
-    canvas.drawRoundRect(busRect, 2.5f * density, 2.5f * density, paint)
-
-    // Parabrisas oscuro
-    paint.color = Color(0xFF111827).toArgb()
-    val winRect = RectF(
-        cx - busW / 2f + 1.5f * density,
-        cy - busH / 2f + 1.5f * density,
-        cx + busW / 2f - 1.5f * density,
-        cy - busH / 2f + 5.5f * density
-    )
-    canvas.drawRoundRect(winRect, 1.5f * density, 1.5f * density, paint)
-
-    // Luces delanteras ámbar
-    paint.color = Color(0xFFFFA726).toArgb()
-    canvas.drawCircle(cx - 3.5f * density, cy + busH / 2f - 2f * density, 1.2f * density, paint)
-    canvas.drawCircle(cx + 3.5f * density, cy + busH / 2f - 2f * density, 1.2f * density, paint)
+    // Pictograma de colectivo (Material "directions_bus"), siempre derecho
+    val icon = ContextCompat.getDrawable(context, R.drawable.ic_bus_marker)?.mutate()
+    if (icon != null) {
+        val half = (11f * density).toInt()
+        icon.setBounds((cx - half).toInt(), (cy - half).toInt(), (cx + half).toInt(), (cy + half).toInt())
+        icon.setTint(android.graphics.Color.WHITE)
+        icon.draw(canvas)
+    }
 
     return BitmapDrawable(context.resources, bitmap)
 }

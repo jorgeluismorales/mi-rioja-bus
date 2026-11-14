@@ -9,7 +9,7 @@ App nativa Android (Kotlin + Jetpack Compose) que consume la API de `larioja.mir
 | Área | Estado | Notas |
 |------|--------|-------|
 | Bottom nav 5 tabs + tema oscuro naranja | ✅ COMPLETADO | Inter vía Google Fonts descargables (fallback sans-serif sin GMS) |
-| Mapa tiempo real (recorrido, paradas, buses, GPS, arribos) | ✅ COMPLETADO | Corregidos endpoint `posicionesBuses`, campo `codigoParada`, polling 15 s, fallback de tiles |
+| Mapa tiempo real (recorrido, paradas, buses, GPS, arribos) | ✅ COMPLETADO | Corregidos endpoint `posicionesBuses`, campo `codigoParada`, polling 5 s en mapa, fallback de tiles |
 | Selector de líneas por grupo | ✅ CORREGIDO | Antes mostraba sólo "RIOJA BUS"/"RIOJA BUS CHILECITO"; ahora TRONCALES / COMPLEMENTARIAS / RURALES / SERVICIOS ESPECIALES / CHILECITO |
 | Planificador de viaje | ✅ COMPLETADO | Directo + 1 transbordo real, mapa del recorrido, búsqueda de destino (Nominatim), alertas automáticas |
 | Alertas GPS (ForegroundService) | ✅ COMPLETADO | Proximidad del usuario **y** del colectivo; se autoapaga sin alertas activas; chequeo de permisos |
@@ -38,7 +38,7 @@ App nativa Android (Kotlin + Jetpack Compose) que consume la API de `larioja.mir
 | `GET /rest/getConfiguracion` | Config general: tarifas (`menu[tipo=tarifas].contenidoJSON`), centro mapa, tiles URL |
 | `GET /rest/gruposLineas` | Árbol: raíz → "RIOJA BUS" (TRONCALES, COMPLEMENTARIAS, RURALES, SERVICIOS ESPECIALES) y "RIOJA BUS CHILECITO" (DISTRITOS → …) |
 | `GET /rest/rutaLinea/{codLinea}` | Recorrido: `nodos[{latitud, longitud, parada, codigoParada, descripcionParada}]` |
-| `GET /rest/posicionesBuses/{codLinea}` | Posición en tiempo real: `posiciones[{interno, latitud, longitud, orientacion, proximaParada, vehiculoRampa, vehiculoNoVisibles}]` (polling 15 s) |
+| `GET /rest/posicionesBuses/{codLinea}` | Posición en tiempo real: `posiciones[{interno, latitud, longitud, orientacion, proximaParada, vehiculoRampa, vehiculoNoVisibles}]` (polling 5 s en mapa, 15 s en servicio de alertas) |
 | `GET /rest/horariosEstimados/{codLinea}/{codParada}` | "Cuando viene": `horariosServicio[{interno, tiempoFaltante(seg)}]` |
 | `GET /rest/getPuntosVentaCercanos/{lat}/{lng}/1` | Puntos de venta: `puntosVenta[{id, tipo(1-6), nombre, domicilio, detalleDomicilio, latitud, longitud}]` |
 | `POST /rest/tarjetaInternal/resultadoSaldo` | Saldo anónimo. Body `{verificacionCaptcha, nroExternoTarjeta}` → `{error, numeroTarjeta, tipoTarjeta, estadoTarjeta, saldos:[{label:"Saldo Principal (Dinero)", value:"2300.00 pasajes"}], fechaSaldo:"09/11/2026 22:19"}` (respuesta real tarjeta 3276226). `value` es **string con sufijo** → se parsea con regex. error 1 = captcha, 2 = nro inválido, 5 = tarjeta sin saldo online. La web oficial usa Cloudflare Turnstile por defecto (header `X-Use-New-Captcha: true`) y cae a `captcha.png` + cookie `JSESSIONID` como fallback: la app usa este segundo modo, mismo contrato |
@@ -70,7 +70,7 @@ App nativa Android (Kotlin + Jetpack Compose) que consume la API de `larioja.mir
 - Al seleccionar línea:
   - Dibuja **polyline del recorrido completo** con los nodos de `/rest/rutaLinea/{cod}`
   - Coloca **markers en cada parada** con popup de nombre de parada
-  - Muestra **buses en tiempo real** (polling 15s a `/rest/posicionesBuses/{cod}`) con ícono rotado según orientación
+  - Muestra **buses en tiempo real** (polling 5 s a `/rest/posicionesBuses/{cod}`) con pictograma de bus siempre derecho y flecha exterior según orientación
   - Ajusta el viewport al bounds del recorrido
 - Botón "Mi ubicación" (GPS) con marker del usuario
 - Tap en parada → muestra tiempos estimados de llegada (hoy el servidor devuelve lista vacía; ver pendientes)

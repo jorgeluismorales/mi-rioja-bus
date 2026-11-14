@@ -256,6 +256,6 @@ class BusMapViewModel @Inject constructor(
     }
 
     companion object {
-        private const val POLLING_INTERVAL_MS = 15_000L
+        private const val POLLING_INTERVAL_MS = 5_000L
     }
 }
