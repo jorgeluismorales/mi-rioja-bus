@@ -44,6 +44,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -123,13 +125,6 @@ fun SaldoScreen(
             }
 
             item {
-                SaldoCardIllustration(
-                    cardNumber = cardNumber,
-                    saldo = saldo
-                )
-            }
-
-            item {
                 SaldoInputCard(
                     cardNumber = cardNumber,
                     saveCard = saveCard,
@@ -185,135 +180,6 @@ fun SaldoScreen(
                 onConfirm = { viewModel.checkBalance() },
                 onDismiss = { viewModel.dismissVerification() }
             )
-        }
-    }
-}
-
-/**
- * Ilustración gráfica de la tarjeta de transporte Mi Bus Rioja / Red Bus.
- */
-@Composable
-fun SaldoCardIllustration(
-    cardNumber: String,
-    saldo: Saldo?
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1.6f)
-            .clip(RoundedCornerShape(Dimens.radiusLg))
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        RiojaOrangeDark,
-                        RiojaOrange,
-                        SurfaceCard
-                    )
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    listOf(
-                        RiojaOrange.copy(alpha = 0.6f),
-                        GlassBorder,
-                        RiojaOrange.copy(alpha = 0.2f)
-                    )
-                ),
-                shape = RoundedCornerShape(Dimens.radiusLg)
-            )
-            .padding(Dimens.xl)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Dimens.sm)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.DirectionsBus,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Text(
-                        text = "Mi Bus Rioja - Red Bus",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Icon(
-                    imageVector = Icons.Rounded.Contactless,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.8f),
-                    modifier = Modifier.size(26.dp)
-                )
-            }
-
-            Icon(
-                imageVector = Icons.Rounded.SimCard,
-                contentDescription = null,
-                tint = RiojaAmber,
-                modifier = Modifier.size(36.dp)
-            )
-
-            Column {
-                val formattedNumber = if (cardNumber.isNotBlank()) {
-                    formatCardNumberDisplay(cardNumber)
-                } else {
-                    "•••• •••• •••• ••••"
-                }
-
-                Text(
-                    text = formattedNumber,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 2.sp
-                )
-
-                Spacer(modifier = Modifier.height(Dimens.xs))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = saldo?.tipo?.uppercase(Locale.ROOT) ?: "TARJETA INTELIGENTE",
-                        color = Color.White.copy(alpha = 0.75f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        letterSpacing = 0.8.sp
-                    )
-
-                    Text(
-                        text = "RED BUS",
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
         }
     }
 }
@@ -412,18 +278,22 @@ private fun VerificationSheet(
             val bitmap = remember(captchaImage) {
                 captchaImage?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
             }
+            // La imagen del captcha es de ~190x50 px: se escala al ancho disponible (relación 3.8:1)
             Box(
                 modifier = Modifier
-                    .width(192.dp)
-                    .height(67.dp)
+                    .weight(1f)
+                    .aspectRatio(3.8f)
                     .clip(RoundedCornerShape(Dimens.radiusSm))
-                    .background(SurfaceVariant),
+                    .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
                 when {
                     bitmap != null -> Image(
                         bitmap = bitmap.asImageBitmap(),
-                        contentDescription = "Código de seguridad"
+                        contentDescription = "Código de seguridad",
+                        contentScale = ContentScale.FillBounds,
+                        filterQuality = FilterQuality.High,
+                        modifier = Modifier.fillMaxSize()
                     )
                     isLoadingCaptcha -> CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
