@@ -433,66 +433,66 @@ fun MapScreen(
             )
 
             // ── 2. Píldoras superiores: línea actual y acceso a filtros ─────
-            if (selectedLine != null) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, top = 16.dp, end = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = SurfaceDark.copy(alpha = 0.92f),
                     border = BorderStroke(1.dp, DividerColor),
-                    onClick = { showFilters = true },
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .statusBarsPadding()
-                        .padding(start = 16.dp, top = 16.dp)
+                    onClick = { showFilters = true }
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(RiojaOrange, CircleShape)
+                        Icon(
+                            imageVector = Icons.Outlined.Tune,
+                            contentDescription = null,
+                            tint = RiojaOrange,
+                            modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Línea ${selectedLine?.descripcion ?: ""}",
+                            text = "Filtros",
                             color = TextPrimary,
                             style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-            }
 
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = SurfaceDark.copy(alpha = 0.92f),
-                border = BorderStroke(1.dp, DividerColor),
-                onClick = { showFilters = true },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(end = 16.dp, top = 16.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Tune,
-                        contentDescription = null,
-                        tint = RiojaOrange,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Filtros",
-                        color = TextPrimary,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                if (selectedLine != null) {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = SurfaceDark.copy(alpha = 0.92f),
+                        border = BorderStroke(1.dp, DividerColor),
+                        onClick = { showFilters = true }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(RiojaOrange, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Línea ${selectedLine?.descripcion ?: ""}",
+                                color = TextPrimary,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
 
