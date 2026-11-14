@@ -64,7 +64,7 @@ data class NodoDto(
     @Json(name = "latitud") val latitud: Double = 0.0,
     @Json(name = "longitud") val longitud: Double = 0.0,
     @Json(name = "parada") val parada: Boolean = false,
-    @Json(name = "codParada") val codParada: String? = null,
+    @Json(name = "codigoParada") val codigoParada: String? = null,
     @Json(name = "descripcionParada") val descripcionParada: String? = null
 )
 
@@ -81,21 +81,18 @@ data class PosicionDto(
     @Json(name = "longitud") val longitud: Double = 0.0,
     @Json(name = "orientacion") val orientacion: Float = 0f,
     @Json(name = "interno") val interno: String = "",
+    @Json(name = "proximaParada") val proximaParada: String? = null,
     @Json(name = "vehiculoRampa") val vehiculoRampa: Boolean = false,
-    @Json(name = "fuera") val fuera: Boolean = false
+    @Json(name = "vehiculoNoVisibles") val vehiculoNoVisibles: Boolean = false
 )
 
-// ── Paradas cercanas / cuando viene ──────────────────────────────────────────
+// ── Horarios estimados / cuando viene ─────────────────────────────────────────
 @JsonClass(generateAdapter = true)
-data class ParadasCercanasResponse(
+data class HorariosEstimadosResponse(
     @Json(name = "error") val error: Int? = null,
-    @Json(name = "servicios") val servicios: List<ServicioDto>? = null,
+    @Json(name = "codLinea") val codLinea: String? = null,
+    @Json(name = "codParada") val codParada: String? = null,
     @Json(name = "horariosServicio") val horariosServicio: List<HorarioDto>? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class ServicioDto(
-    @Json(name = "horariosServicio") val horariosServicio: List<HorarioDto> = emptyList()
 )
 
 @JsonClass(generateAdapter = true)
@@ -108,34 +105,52 @@ data class HorarioDto(
 @JsonClass(generateAdapter = true)
 data class PuntosVentaResponse(
     @Json(name = "error") val error: Int = 0,
+    @Json(name = "version") val version: Int? = null,
+    @Json(name = "sinCambios") val sinCambios: Boolean? = null,
     @Json(name = "puntosVenta") val puntosVenta: List<PuntoVentaDto> = emptyList()
 )
 
 @JsonClass(generateAdapter = true)
 data class PuntoVentaDto(
+    @Json(name = "id") val id: Long? = null,
+    @Json(name = "tipo") val tipo: Int? = null,
     @Json(name = "nombre") val nombre: String = "",
-    @Json(name = "direccion") val direccion: String = "",
+    @Json(name = "domicilio") val domicilio: String? = null,
+    @Json(name = "detalleDomicilio") val detalleDomicilio: String? = null,
     @Json(name = "latitud") val latitud: Double = 0.0,
-    @Json(name = "longitud") val longitud: Double = 0.0,
-    @Json(name = "tipo") val tipo: String = "comun",
-    @Json(name = "horario") val horario: String? = null
+    @Json(name = "longitud") val longitud: Double = 0.0
 )
 
 // ── Saldo / tarjeta ───────────────────────────────────────────────────────────
 @JsonClass(generateAdapter = true)
-data class SaldoResponse(
-    @Json(name = "error") val error: Int = 0,
-    @Json(name = "saldo") val saldo: Double? = null,
-    @Json(name = "nroTarjeta") val nroTarjeta: String? = null,
-    @Json(name = "tipo") val tipo: String? = null,
-    @Json(name = "movimientos") val movimientos: List<MovimientoDto>? = null
+data class SaldoRequest(
+    @Json(name = "verificacionCaptcha") val verificacionCaptcha: String,
+    @Json(name = "nroExternoTarjeta") val nroExternoTarjeta: String
 )
 
 @JsonClass(generateAdapter = true)
-data class MovimientoDto(
-    @Json(name = "fecha") val fecha: String = "",
-    @Json(name = "monto") val monto: Double = 0.0,
-    @Json(name = "tipo") val tipo: String = "",
-    @Json(name = "descripcion") val descripcion: String? = null,
-    @Json(name = "linea") val linea: String? = null
+data class SaldoResponse(
+    @Json(name = "error") val error: Int = 0,
+    @Json(name = "mensaje") val mensaje: String? = null,
+    @Json(name = "numeroTarjeta") val numeroTarjeta: String? = null,
+    @Json(name = "tipoTarjeta") val tipoTarjeta: String? = null,
+    @Json(name = "estadoTarjeta") val estadoTarjeta: String? = null,
+    @Json(name = "saldos") val saldos: List<SaldoItemDto>? = null,
+    @Json(name = "fechaSaldo") val fechaSaldo: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SaldoItemDto(
+    @Json(name = "label") val label: String? = null,
+    @Json(name = "value") val value: Any? = null
+)
+
+// ── Nominatim (búsqueda de lugares) ───────────────────────────────────────────
+@JsonClass(generateAdapter = true)
+data class NominatimPlaceDto(
+    @Json(name = "place_id") val placeId: Long = 0,
+    @Json(name = "lat") val lat: String = "",
+    @Json(name = "lon") val lon: String = "",
+    @Json(name = "display_name") val displayName: String = "",
+    @Json(name = "name") val name: String? = null
 )

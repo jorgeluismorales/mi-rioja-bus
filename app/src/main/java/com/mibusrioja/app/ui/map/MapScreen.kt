@@ -1,15 +1,8 @@
 package com.mibusrioja.app.ui.map
 
 import android.Manifest
-import android.content.Context
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -30,6 +23,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -40,7 +36,11 @@ import androidx.compose.material.icons.filled.DirectionsBus
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,18 +51,19 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -84,12 +85,17 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.location.LocationServices
-import com.mibusrioja.app.domain.model.AppConfig
 import com.mibusrioja.app.domain.model.BusLine
 import com.mibusrioja.app.domain.model.BusPosition
 import com.mibusrioja.app.domain.model.LineGroup
 import com.mibusrioja.app.domain.model.RouteNode
+import com.mibusrioja.app.domain.geo.BusClusterer
+import com.mibusrioja.app.domain.geo.BusMapItem
 import com.mibusrioja.app.domain.model.TiempoEstimado
+import com.mibusrioja.app.ui.components.AppBottomSheet
+import com.mibusrioja.app.ui.components.AppCard
+import com.mibusrioja.app.ui.components.Dimens
+import com.mibusrioja.app.ui.components.SectionTitle
 import com.mibusrioja.app.ui.theme.Background
 import com.mibusrioja.app.ui.theme.DividerColor
 import com.mibusrioja.app.ui.theme.RiojaOrange
@@ -98,6 +104,7 @@ import com.mibusrioja.app.ui.theme.RiojaOrangeLight
 import com.mibusrioja.app.ui.theme.SuccessGreen
 import com.mibusrioja.app.ui.theme.SurfaceCard
 import com.mibusrioja.app.ui.theme.SurfaceDark
+import com.mibusrioja.app.ui.theme.SurfaceVariant
 import com.mibusrioja.app.ui.theme.TextMuted
 import com.mibusrioja.app.ui.theme.TextPrimary
 import com.mibusrioja.app.ui.theme.TextSecondary
@@ -108,6 +115,9 @@ import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
@@ -130,20 +140,29 @@ fun MapScreen(
     val lineGroups by viewModel.lineGroups.collectAsStateWithLifecycle()
     val selectedLine by viewModel.selectedLine.collectAsStateWithLifecycle()
     val routeNodes by viewModel.routeNodes.collectAsStateWithLifecycle()
-    val busPositions by viewModel.busPositions.collectAsStateWithLifecycle()
+    val visibleBuses by viewModel.visibleBuses.collectAsStateWithLifecycle()
+    val showStops by viewModel.showStops.collectAsStateWithLifecycle()
+    val onlyRampa by viewModel.onlyRampa.collectAsStateWithLifecycle()
+    val selectedBus by viewModel.selectedBus.collectAsStateWithLifecycle()
+    val lastBusUpdateMillis by viewModel.lastBusUpdateMillis.collectAsStateWithLifecycle()
     val selectedStop by viewModel.selectedStop.collectAsStateWithLifecycle()
     val stopArrivalTimes by viewModel.stopArrivalTimes.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val isLoadingArrivals by viewModel.isLoadingArrivals.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val appConfig by viewModel.appConfig.collectAsStateWithLifecycle()
+    val tileUrl by viewModel.tileUrl.collectAsStateWithLifecycle()
 
     // MapView & Overlays references
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var locationOverlayInstance by remember { mutableStateOf<MyLocationNewOverlay?>(null) }
     val polylineRef = remember { mutableStateOf<Polyline?>(null) }
     val stopMarkers = remember { mutableListOf<Marker>() }
-    val busMarkersMap = remember { mutableMapOf<String, Marker>() }
+    val busMarkers = remember { mutableListOf<Marker>() }
+    val lastBusSignature = remember { mutableStateOf("") }
+    var zoomLevel by remember { mutableDoubleStateOf(DEFAULT_ZOOM) }
+    val lastShowStops = remember { mutableStateOf(true) }
+    var showFilters by remember { mutableStateOf(false) }
     val lastRouteLineCode = remember { mutableStateOf<String?>(null) }
     val lastRouteNodeCount = remember { mutableStateOf(0) }
 
@@ -192,20 +211,24 @@ fun MapScreen(
     }
 
     // MapView Lifecycle management
-    DisposableEffect(lifecycleOwner, mapViewInstance) {
+    val lifecycleMap = mapViewInstance
+    val lifecycleLocOverlay = locationOverlayInstance
+    DisposableEffect(lifecycleOwner, lifecycleMap) {
+        val map = lifecycleMap
+        val locOverlay = lifecycleLocOverlay
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mapViewInstance?.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapViewInstance?.onPause()
-                Lifecycle.Event.ON_DESTROY -> mapViewInstance?.onDetach()
+                Lifecycle.Event.ON_RESUME -> map?.onResume()
+                Lifecycle.Event.ON_PAUSE -> map?.onPause()
+                Lifecycle.Event.ON_DESTROY -> map?.onDetach()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            locationOverlayInstance?.disableMyLocation()
-            mapViewInstance?.onDetach()
+            locOverlay?.disableMyLocation()
+            map?.onDetach()
         }
     }
 
@@ -236,10 +259,18 @@ fun MapScreen(
                 factory = { ctx ->
                     org.osmdroid.config.Configuration.getInstance().userAgentValue = ctx.packageName
                     MapView(ctx).apply {
-                        setTileSource(createTileSource(appConfig))
+                        setTileSource(createTileSource(tileUrl))
                         setMultiTouchControls(true)
+                        setDestroyMode(false)
                         isTilesScaledToDpi = true
                         zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                        addMapListener(object : MapListener {
+                            override fun onScroll(event: ScrollEvent): Boolean = false
+                            override fun onZoom(event: ZoomEvent): Boolean {
+                                zoomLevel = event.zoomLevel
+                                return true
+                            }
+                        })
                         controller.setZoom(DEFAULT_ZOOM)
                         controller.setCenter(
                             GeoPoint(
@@ -263,7 +294,7 @@ fun MapScreen(
                 },
                 update = { mapView ->
                     // 1. Actualizar fuente de tiles si cargó la configuración
-                    val targetTileSource = createTileSource(appConfig)
+                    val targetTileSource = createTileSource(tileUrl)
                     if (mapView.tileProvider.tileSource.name() != targetTileSource.name()) {
                         mapView.setTileSource(targetTileSource)
                     }
@@ -271,11 +302,13 @@ fun MapScreen(
                     // 2. Actualizar recorrido (polyline y paradas) cuando cambian los nodos
                     val currentLineCode = selectedLine?.codLinea
                     val routeChanged = currentLineCode != lastRouteLineCode.value ||
-                            routeNodes.size != lastRouteNodeCount.value
+                            routeNodes.size != lastRouteNodeCount.value ||
+                            showStops != lastShowStops.value
 
                     if (routeChanged) {
                         lastRouteLineCode.value = currentLineCode
                         lastRouteNodeCount.value = routeNodes.size
+                        lastShowStops.value = showStops
 
                         // Remover polyline anterior
                         polylineRef.value?.let { mapView.overlays.remove(it) }
@@ -286,8 +319,9 @@ fun MapScreen(
                         stopMarkers.clear()
 
                         // Limpiar colectivos anteriores al cambiar de línea
-                        busMarkersMap.values.forEach { mapView.overlays.remove(it) }
-                        busMarkersMap.clear()
+                        busMarkers.forEach { mapView.overlays.remove(it) }
+                        busMarkers.clear()
+                        lastBusSignature.value = ""
 
                         if (routeNodes.isNotEmpty()) {
                             val geoPoints = routeNodes.map { GeoPoint(it.lat, it.lng) }
@@ -304,7 +338,7 @@ fun MapScreen(
                             mapView.overlays.add(0, polyline)
 
                             // Dibujar paradas
-                            val paradas = routeNodes.filter { it.esParada }
+                            val paradas = if (showStops) routeNodes.filter { it.esParada } else emptyList()
                             paradas.forEach { stopNode ->
                                 val stopMarker = Marker(mapView).apply {
                                     position = GeoPoint(stopNode.lat, stopNode.lng)
@@ -334,60 +368,131 @@ fun MapScreen(
                         mapView.invalidate()
                     }
 
-                    // 3. Actualizar marcadores de buses en tiempo real (polling cada 15s)
-                    val currentInternos = busPositions.map { it.interno }.toSet()
-
-                    // Eliminar buses que ya no reportan posición
-                    val iterator = busMarkersMap.iterator()
-                    while (iterator.hasNext()) {
-                        val entry = iterator.next()
-                        if (entry.key !in currentInternos) {
-                            mapView.overlays.remove(entry.value)
-                            iterator.remove()
+                    // 3. Actualizar marcadores de buses con clustering por zoom
+                    val items = BusClusterer.cluster(visibleBuses, zoomLevel)
+                    val signature = buildString {
+                        append("%.1f".format(zoomLevel))
+                        items.forEach { item ->
+                            when (item) {
+                                is BusMapItem.Single -> append("|s:${item.bus.interno}:%.5f:%.5f".format(item.bus.lat, item.bus.lng))
+                                is BusMapItem.Cluster -> append("|c:%.5f:%.5f:".format(item.lat, item.lng)).append(item.buses.joinToString(",") { it.interno })
+                            }
                         }
                     }
 
-                    // Agregar o actualizar posición y rotación de buses
-                    for (bus in busPositions) {
-                        val targetGeoPoint = GeoPoint(bus.lat, bus.lng)
-                        val existing = busMarkersMap[bus.interno]
-                        if (existing != null) {
-                            existing.position = targetGeoPoint
-                            existing.rotation = bus.orientacion
-                            existing.snippet = if (bus.tieneRampa) "Accesible con rampa" else "Sin rampa"
-                        } else {
-                            val newBusMarker = Marker(mapView).apply {
-                                id = bus.interno
-                                position = targetGeoPoint
-                                rotation = bus.orientacion
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                icon = busIconDrawable
-                                title = "Interno ${bus.interno}"
-                                snippet = if (bus.tieneRampa) "Accesible con rampa" else "Sin rampa"
-                                setOnMarkerClickListener { m, _ ->
-                                    m.showInfoWindow()
-                                    true
+                    if (signature != lastBusSignature.value) {
+                        lastBusSignature.value = signature
+                        busMarkers.forEach { mapView.overlays.remove(it) }
+                        busMarkers.clear()
+
+                        items.forEach { item ->
+                            when (item) {
+                                is BusMapItem.Single -> {
+                                    val bus = item.bus
+                                    val marker = Marker(mapView).apply {
+                                        id = bus.interno
+                                        position = GeoPoint(bus.lat, bus.lng)
+                                        rotation = bus.orientacion
+                                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                        icon = busIconDrawable
+                                        setOnMarkerClickListener { _, _ ->
+                                            viewModel.selectBus(bus.interno)
+                                            true
+                                        }
+                                    }
+                                    busMarkers.add(marker)
+                                    mapView.overlays.add(marker)
+                                }
+                                is BusMapItem.Cluster -> {
+                                    val marker = Marker(mapView).apply {
+                                        position = GeoPoint(item.lat, item.lng)
+                                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                        icon = createClusterDrawable(context, item.buses.size)
+                                        setOnMarkerClickListener { _, _ ->
+                                            mapView.controller.animateTo(
+                                                GeoPoint(item.lat, item.lng),
+                                                (mapView.zoomLevelDouble + 2).coerceAtMost(19.0),
+                                                500L
+                                            )
+                                            true
+                                        }
+                                    }
+                                    busMarkers.add(marker)
+                                    mapView.overlays.add(marker)
                                 }
                             }
-                            busMarkersMap[bus.interno] = newBusMarker
-                            mapView.overlays.add(newBusMarker)
                         }
+                        mapView.invalidate()
                     }
-
-                    mapView.invalidate()
                 }
             )
 
-            // ── 2. Sección superior: Chips de grupos y líneas ────────────────
-            LineSelectionHeader(
-                lineGroups = lineGroups,
-                selectedLine = selectedLine,
-                onLineSelected = { line -> viewModel.selectLine(line) },
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            // ── 2. Píldoras superiores: línea actual y acceso a filtros ─────
+            if (selectedLine != null) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = SurfaceDark.copy(alpha = 0.92f),
+                    border = BorderStroke(1.dp, DividerColor),
+                    onClick = { showFilters = true },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(start = 16.dp, top = 16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(RiojaOrange, CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Línea ${selectedLine?.descripcion ?: ""}",
+                            color = TextPrimary,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = SurfaceDark.copy(alpha = 0.92f),
+                border = BorderStroke(1.dp, DividerColor),
+                onClick = { showFilters = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(end = 16.dp, top = 16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Tune,
+                        contentDescription = null,
+                        tint = RiojaOrange,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Filtros",
+                        color = TextPrimary,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
 
             // ── 3. Badge informativo de colectivos activos ────────────────────
-            if (selectedLine != null && busPositions.isNotEmpty()) {
+            if (selectedLine != null && visibleBuses.isNotEmpty()) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = SurfaceDark.copy(alpha = 0.92f),
@@ -407,7 +512,7 @@ fun MapScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${busPositions.size} ${if (busPositions.size == 1) "colectivo activo" else "colectivos activos"}",
+                            text = "${visibleBuses.size} ${if (visibleBuses.size == 1) "colectivo activo" else "colectivos activos"}",
                             color = TextPrimary,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
@@ -418,18 +523,15 @@ fun MapScreen(
 
             // ── 4. Estado vacío: 'Seleccioná una línea' ───────────────────────
             if (selectedLine == null && !isLoading) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = SurfaceCard.copy(alpha = 0.95f),
+                AppCard(
+                    containerColor = SurfaceCard.copy(alpha = 0.95f),
                     border = BorderStroke(1.dp, RiojaOrange.copy(alpha = 0.5f)),
-                    shadowElevation = 8.dp,
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 20.dp, vertical = 28.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -448,14 +550,14 @@ fun MapScreen(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                text = "Seleccioná una línea para ver el recorrido",
+                                text = "Tocá Filtros y elegí una línea para ver su recorrido",
                                 color = TextPrimary,
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Elegí una línea de colectivos arriba para ver su ruta y paradas.",
+                                text = "Vas a ver la ruta, las paradas y los colectivos activos en tiempo real.",
                                 color = TextSecondary,
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -544,16 +646,7 @@ fun MapScreen(
 
     // ── 7. ModalBottomSheet de tiempos estimados para parada ───────────────
     if (selectedStop != null) {
-        ModalBottomSheet(
-            onDismissRequest = { viewModel.clearSelectedStop() },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = SurfaceDark,
-            contentColor = TextPrimary,
-            tonalElevation = 8.dp,
-            dragHandle = {
-                BottomSheetDefaults.DragHandle(color = TextMuted)
-            }
-        ) {
+        AppBottomSheet(onDismissRequest = { viewModel.clearSelectedStop() }) {
             StopArrivalBottomSheetContent(
                 stop = selectedStop!!,
                 selectedLine = selectedLine,
@@ -563,123 +656,27 @@ fun MapScreen(
             )
         }
     }
-}
 
-/**
- * Cabecera superior con chips horizontales scrolleables para grupos y líneas de colectivos.
- */
-@Composable
-private fun LineSelectionHeader(
-    lineGroups: List<LineGroup>,
-    selectedLine: BusLine?,
-    onLineSelected: (BusLine) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var selectedGroup by remember(lineGroups) {
-        mutableStateOf(lineGroups.firstOrNull())
+    if (selectedBus != null) {
+        BusDetailSheet(
+            bus = selectedBus!!,
+            selectedLine = selectedLine,
+            lastBusUpdateMillis = lastBusUpdateMillis,
+            onDismiss = { viewModel.clearSelectedBus() }
+        )
     }
 
-    // Mantener sincronizado el grupo si la línea seleccionada pertenece a otro grupo
-    LaunchedEffect(selectedLine, lineGroups) {
-        if (selectedLine != null) {
-            val matchingGroup = lineGroups.firstOrNull { group ->
-                group.extractAllLines().any { it.codLinea == selectedLine.codLinea }
-            }
-            if (matchingGroup != null && matchingGroup != selectedGroup) {
-                selectedGroup = matchingGroup
-            }
-        }
-    }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Background.copy(alpha = 0.95f),
-                        Background.copy(alpha = 0.85f),
-                        Background.copy(alpha = 0.0f)
-                    )
-                )
-            )
-            .padding(top = 10.dp, bottom = 14.dp)
-    ) {
-        // Fila 1: Grupos de líneas (Troncales, Complementarias, Rurales, etc.)
-        if (lineGroups.isNotEmpty()) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(lineGroups, key = { it.nombre }) { group ->
-                    val isGroupSelected = group == selectedGroup
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (isGroupSelected) RiojaOrange else SurfaceCard,
-                        border = if (isGroupSelected) null else BorderStroke(1.dp, DividerColor),
-                        onClick = { selectedGroup = group },
-                        modifier = Modifier.animateContentSize()
-                    ) {
-                        Text(
-                            text = formatGroupName(group.nombre),
-                            color = if (isGroupSelected) Color.White else TextSecondary,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (isGroupSelected) FontWeight.Bold else FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // Fila 2: Líneas dentro del grupo seleccionado
-        val linesToShow = remember(selectedGroup, lineGroups) {
-            selectedGroup?.extractAllLines() ?: lineGroups.flatMap { it.extractAllLines() }
-        }
-
-        if (linesToShow.isNotEmpty()) {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(linesToShow, key = { it.codLinea }) { line ->
-                    val isLineSelected = line.codLinea == selectedLine?.codLinea
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isLineSelected) RiojaOrange.copy(alpha = 0.22f) else SurfaceDark.copy(alpha = 0.85f),
-                        border = BorderStroke(
-                            width = if (isLineSelected) 1.5.dp else 1.dp,
-                            color = if (isLineSelected) RiojaOrange else DividerColor
-                        ),
-                        onClick = { onLineSelected(line) },
-                        modifier = Modifier.animateContentSize()
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DirectionsBus,
-                                contentDescription = null,
-                                tint = if (isLineSelected) RiojaOrange else TextMuted,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = line.descripcion.ifBlank { "Línea ${line.codLinea}" },
-                                color = if (isLineSelected) TextPrimary else TextSecondary,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (isLineSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-            }
-        }
+    if (showFilters) {
+        FiltersSheet(
+            lineGroups = lineGroups,
+            selectedLine = selectedLine,
+            showStops = showStops,
+            onlyRampa = onlyRampa,
+            onSelectLine = { line -> viewModel.selectLine(line); showFilters = false },
+            onShowStopsChange = { viewModel.setShowStops(it) },
+            onOnlyRampaChange = { viewModel.setOnlyRampa(it) },
+            onDismiss = { showFilters = false }
+        )
     }
 }
 
@@ -906,123 +903,306 @@ private fun StopArrivalBottomSheetContent(
     }
 }
 
+
+/**
+ * Sheet de filtros: grupo, línea y opciones de visualización del mapa.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FiltersSheet(
+    lineGroups: List<LineGroup>,
+    selectedLine: BusLine?,
+    showStops: Boolean,
+    onlyRampa: Boolean,
+    onSelectLine: (BusLine) -> Unit,
+    onShowStopsChange: (Boolean) -> Unit,
+    onOnlyRampaChange: (Boolean) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var selectedGroupIndex by remember { mutableIntStateOf(0) }
+    val currentGroup = lineGroups.getOrNull(selectedGroupIndex)
+    val linesInGroup = currentGroup?.extractAllLines() ?: emptyList()
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Text(
+            text = "Filtros",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+
+        Spacer(modifier = Modifier.height(Dimens.lg))
+
+        SectionTitle(text = "Grupo")
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(Dimens.sm),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(lineGroups.size) { index ->
+                val group = lineGroups[index]
+                val isSelected = selectedGroupIndex == index
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { selectedGroupIndex = index },
+                    label = { Text(formatGroupName(group.nombre)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = RiojaOrange,
+                        selectedLabelColor = Color.White,
+                        containerColor = SurfaceVariant,
+                        labelColor = TextSecondary
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        borderColor = if (isSelected) RiojaOrange else DividerColor,
+                        enabled = true,
+                        selected = isSelected
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Dimens.lg))
+
+        SectionTitle(text = "Línea")
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 320.dp),
+            verticalArrangement = Arrangement.spacedBy(Dimens.sm)
+        ) {
+            items(linesInGroup, key = { it.codLinea }) { line ->
+                val isSelected = line.codLinea == selectedLine?.codLinea
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(Dimens.radiusSm),
+                    color = if (isSelected) RiojaOrange.copy(alpha = 0.15f) else SurfaceVariant,
+                    border = BorderStroke(1.dp, if (isSelected) RiojaOrange else DividerColor),
+                    onClick = { onSelectLine(line) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = Dimens.md, vertical = Dimens.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Dimens.md)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(
+                                    if (isSelected) RiojaOrange else RiojaOrange.copy(alpha = 0.7f),
+                                    CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = line.codLinea,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = line.descripcion.ifBlank { "Línea ${line.codLinea}" },
+                            color = TextPrimary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Dimens.lg))
+
+        SectionTitle(text = "Opciones")
+
+        FilterSwitchRow(
+            label = "Mostrar paradas",
+            checked = showStops,
+            onCheckedChange = onShowStopsChange
+        )
+        Spacer(modifier = Modifier.height(Dimens.sm))
+        FilterSwitchRow(
+            label = "Solo colectivos con rampa",
+            checked = onlyRampa,
+            onCheckedChange = onOnlyRampaChange
+        )
+    }
+}
+
+@Composable
+private fun FilterSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            color = TextPrimary,
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = RiojaOrange,
+                uncheckedThumbColor = TextMuted,
+                uncheckedTrackColor = SurfaceVariant
+            )
+        )
+    }
+}
+
+/**
+ * Sheet con detalle del colectivo seleccionado en el mapa.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BusDetailSheet(
+    bus: BusPosition,
+    selectedLine: BusLine?,
+    lastBusUpdateMillis: Long?,
+    onDismiss: () -> Unit
+) {
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.md)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(RiojaOrange, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DirectionsBus,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+            Column {
+                Text(
+                    text = "Interno ${bus.interno}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Text(
+                    text = "Línea ${selectedLine?.descripcion ?: ""}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(Dimens.lg))
+
+        val elapsedSec = lastBusUpdateMillis?.let { ((nowMillis - it) / 1000).coerceAtLeast(0) }
+        val updatedText = when {
+            elapsedSec == null -> "Sin dato"
+            elapsedSec < 60 -> "hace ${elapsedSec}s"
+            else -> "hace ${elapsedSec / 60} min"
+        }
+        val heading = bus.orientacion.toInt()
+        val cardinal = listOf("N", "NE", "E", "SE", "S", "SO", "O", "NO")[
+            ((heading + 22) / 45) % 8
+        ]
+
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.md)) {
+            BusInfoTile(
+                label = "Próxima parada",
+                value = bus.proximaParada?.takeIf { it.isNotBlank() } ?: "Sin dato",
+                modifier = Modifier.weight(1f)
+            )
+            BusInfoTile(
+                label = "Accesibilidad",
+                value = if (bus.tieneRampa) "Con rampa" else "Sin rampa",
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(Dimens.md))
+        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.md)) {
+            BusInfoTile(
+                label = "Rumbo",
+                value = "$cardinal ${heading}°",
+                modifier = Modifier.weight(1f)
+            )
+            BusInfoTile(
+                label = "Actualizado",
+                value = updatedText,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(Dimens.lg))
+
+        Text(
+            text = "La API de Red Bus no publica patente ni ETA por colectivo.",
+            color = TextMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+private fun BusInfoTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(Dimens.radiusSm),
+        color = SurfaceVariant,
+        border = BorderStroke(1.dp, DividerColor)
+    ) {
+        Column(modifier = Modifier.padding(Dimens.md)) {
+            Text(
+                text = label,
+                color = TextMuted,
+                style = MaterialTheme.typography.labelSmall
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                color = TextPrimary,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
 /**
  * Crea la fuente de tiles de OSMDroid usando urlPrincipalMapas con fallback a urlSecundariaMapas o MAPNIK.
  */
-private fun createTileSource(config: AppConfig?): ITileSource {
-    val primaryUrl = config?.urlPrincipalMapas?.takeIf { it.isNotBlank() }
-    val secondaryUrl = config?.urlSecundariaMapas?.takeIf { it.isNotBlank() }
-    val targetUrl = primaryUrl ?: secondaryUrl
-
-    if (targetUrl != null && targetUrl.contains("{z}")) {
-        try {
-            val baseUrl = targetUrl.substringBefore("{z}")
-            return XYTileSource(
-                "RiojaBusTiles",
-                1, 19, 256, ".png",
-                arrayOf(baseUrl)
-            )
-        } catch (_: Exception) {
-            // fallback al mapa estándar
-        }
+internal fun createTileSource(url: String?): ITileSource {
+    val target = url?.takeIf { it.contains("{z}") } ?: return TileSourceFactory.MAPNIK
+    return try {
+        val host = target.substringBefore("{z}").substringAfter("://").substringBefore("/")
+        XYTileSource(
+            "tiles-$host",
+            1, 19, 256, ".png",
+            arrayOf(target.substringBefore("{z}"))
+        )
+    } catch (_: Exception) {
+        TileSourceFactory.MAPNIK
     }
-    return TileSourceFactory.MAPNIK
-}
-
-/**
- * Genera dinámicamente un ícono circular blanco con borde RiojaOrange para las paradas.
- */
-private fun createStopMarkerDrawable(context: Context): Drawable {
-    val density = context.resources.displayMetrics.density
-    val sizePx = (22 * density).toInt()
-    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-    val cx = sizePx / 2f
-    val cy = sizePx / 2f
-
-    // Sombra sutil
-    paint.color = android.graphics.Color.parseColor("#44000000")
-    paint.style = Paint.Style.FILL
-    canvas.drawCircle(cx, cy + 1f * density, 9f * density, paint)
-
-    // Aro exterior naranja
-    paint.color = Color(0xFFFF6B35).toArgb()
-    canvas.drawCircle(cx, cy, 8.5f * density, paint)
-
-    // Círculo blanco central
-    paint.color = android.graphics.Color.WHITE
-    canvas.drawCircle(cx, cy, 6.5f * density, paint)
-
-    // Punto central oscuro
-    paint.color = Color(0xFF111827).toArgb()
-    canvas.drawCircle(cx, cy, 3f * density, paint)
-
-    return BitmapDrawable(context.resources, bitmap)
-}
-
-/**
- * Genera dinámicamente un ícono de colectivo en tiempo real con indicador de orientación.
- */
-private fun createBusMarkerDrawable(context: Context): Drawable {
-    val density = context.resources.displayMetrics.density
-    val sizePx = (44 * density).toInt()
-    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-    val cx = sizePx / 2f
-    val cy = sizePx / 2f
-    val radius = 14f * density
-
-    // Puntero triangular de orientación hacia el norte (rotado luego con bus.orientacion)
-    paint.color = Color(0xFFCC4D1A).toArgb()
-    paint.style = Paint.Style.FILL
-    val pointerPath = Path().apply {
-        moveTo(cx, 2f * density)
-        lineTo(cx - 5f * density, cy - radius + 2f * density)
-        lineTo(cx + 5f * density, cy - radius + 2f * density)
-        close()
-    }
-    canvas.drawPath(pointerPath, paint)
-
-    // Borde blanco exterior
-    paint.color = android.graphics.Color.WHITE
-    canvas.drawCircle(cx, cy, radius + 2f * density, paint)
-
-    // Círculo principal naranja
-    paint.color = Color(0xFFFF6B35).toArgb()
-    canvas.drawCircle(cx, cy, radius, paint)
-
-    // Silueta de colectivo blanca en el centro
-    paint.color = android.graphics.Color.WHITE
-    val busW = 12f * density
-    val busH = 16f * density
-    val busRect = RectF(
-        cx - busW / 2f,
-        cy - busH / 2f,
-        cx + busW / 2f,
-        cy + busH / 2f
-    )
-    canvas.drawRoundRect(busRect, 2.5f * density, 2.5f * density, paint)
-
-    // Parabrisas oscuro
-    paint.color = Color(0xFF111827).toArgb()
-    val winRect = RectF(
-        cx - busW / 2f + 1.5f * density,
-        cy - busH / 2f + 1.5f * density,
-        cx + busW / 2f - 1.5f * density,
-        cy - busH / 2f + 5.5f * density
-    )
-    canvas.drawRoundRect(winRect, 1.5f * density, 1.5f * density, paint)
-
-    // Luces delanteras ámbar
-    paint.color = Color(0xFFFFA726).toArgb()
-    canvas.drawCircle(cx - 3.5f * density, cy + busH / 2f - 2f * density, 1.2f * density, paint)
-    canvas.drawCircle(cx + 3.5f * density, cy + busH / 2f - 2f * density, 1.2f * density, paint)
-
-    return BitmapDrawable(context.resources, bitmap)
 }
 
 /**

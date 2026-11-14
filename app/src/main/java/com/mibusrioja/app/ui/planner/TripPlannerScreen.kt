@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,10 +42,34 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.location.LocationServices
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.mibusrioja.app.domain.model.FrequentDestination
+import com.mibusrioja.app.domain.model.PlaceSuggestion
 import com.mibusrioja.app.domain.model.TripPlan
 import com.mibusrioja.app.domain.model.TripStep
 import com.mibusrioja.app.domain.model.TripStepType
+import com.mibusrioja.app.ui.map.createPointMarkerDrawable
+import com.mibusrioja.app.ui.map.createStopMarkerDrawable
+import com.mibusrioja.app.ui.map.createTileSource
+import com.mibusrioja.app.ui.components.AppBottomSheet
+import com.mibusrioja.app.ui.components.AppCard
+import com.mibusrioja.app.ui.components.AppTextField
+import com.mibusrioja.app.ui.components.Dimens
+import com.mibusrioja.app.ui.components.PrimaryButton
+import com.mibusrioja.app.ui.components.ScreenHeader
+import com.mibusrioja.app.ui.components.SecondaryButton
+import com.mibusrioja.app.ui.components.SectionTitle
+import com.mibusrioja.app.ui.components.StatusPill
 import com.mibusrioja.app.ui.theme.*
+import org.osmdroid.config.Configuration
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 import java.util.Locale
 
 @SuppressLint("MissingPermission")
@@ -60,6 +85,13 @@ fun TripPlannerScreen(
     val destDescription by viewModel.destDescription.collectAsStateWithLifecycle()
     val destLocation by viewModel.destLocation.collectAsStateWithLifecycle()
     val alertsAutoCreated by viewModel.alertsAutoCreated.collectAsStateWithLifecycle()
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val tileUrl by viewModel.tileUrl.collectAsStateWithLifecycle()
+    val frequentDestinations by viewModel.frequentDestinations.collectAsStateWithLifecycle()
+    val originLabel by viewModel.originLabel.collectAsStateWithLifecycle()
+    val originIsGps by viewModel.originIsGps.collectAsStateWithLifecycle()
+    val originSuggestions by viewModel.originSuggestions.collectAsStateWithLifecycle()
+    var showOriginSheet by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -148,216 +180,182 @@ fun TripPlannerScreen(
             ) {
                 // Título de la pantalla
                 item {
-                    Column {
-                        Text(
-                            text = "Planificador de Viaje",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "Combinaciones inteligentes y alertas de transbordo",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
-                        )
+                    ScreenHeader(
+                        title = "Planificador de Viaje",
+                        subtitle = "Encontrá el mejor recorrido en colectivo"
+                    )
+                }
+
+                // Origen
+                item {
+                    AppCard {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .background(RiojaOrange.copy(alpha = 0.12f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.MyLocation,
+                                    contentDescription = null,
+                                    tint = RiojaOrange,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(Dimens.md))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = originLabel,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (originIsGps) "Cerca de vos" else "Punto de partida elegido",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            IconButton(onClick = { showOriginSheet = true }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Edit,
+                                    contentDescription = "Cambiar punto de partida",
+                                    tint = TextSecondary
+                                )
+                            }
+                        }
                     }
                 }
 
-                // Sección superior: Tarjeta con campos de Origen y Destino
+                // Destino
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = SurfaceCard),
-                        border = BorderStroke(1.dp, GlassBorder)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // ── ORIGEN: GPS ──────────────────────────────────────────
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Punto azul pulsante GPS
-                                Box(
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clip(CircleShape)
-                                        .background(MapUserColor.copy(alpha = 0.25f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(MapUserColor)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Tu ubicación (GPS)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MapUserColor
-                                    )
-                                    val coordsText = if (originLocation != null) {
-                                        "Lat: ${String.format(Locale.US, "%.4f", originLocation!!.first)}, Lng: ${String.format(Locale.US, "%.4f", originLocation!!.second)}"
-                                    } else {
-                                        "Buscando satélites GPS..."
-                                    }
-                                    Text(
-                                        text = coordsText,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = {
-                                        if (hasLocationPermission) {
-                                            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
-                                                loc?.let { viewModel.setOriginFromGps(it.latitude, it.longitude) }
-                                                    ?: viewModel.setOriginFromGps(-29.4134003, -66.8560292)
-                                            }
-                                        } else {
-                                            requestPermissionLauncher.launch(
-                                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MyLocation,
-                                        contentDescription = "Actualizar GPS",
-                                        tint = MapUserColor,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-                            Divider(color = DividerColor.copy(alpha = 0.5f), thickness = 1.dp)
-
-                            // ── DESTINO ──────────────────────────────────────────────
-                            OutlinedTextField(
-                                value = destDescription,
-                                onValueChange = { viewModel.setDestinationDescription(it) },
-                                modifier = Modifier.fillMaxWidth(),
-                                placeholder = {
-                                    Text(
-                                        text = "¿A dónde querés ir en La Rioja?",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = TextMuted
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = null,
-                                        tint = RiojaOrange,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (destDescription.isNotBlank()) {
-                                        IconButton(onClick = { viewModel.setDestinationDescription("") }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Limpiar",
-                                                tint = TextMuted,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-                                },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = RiojaOrange,
-                                    unfocusedBorderColor = DividerColor,
-                                    focusedTextColor = TextPrimary,
-                                    unfocusedTextColor = TextPrimary,
-                                    focusedContainerColor = SurfaceDark,
-                                    unfocusedContainerColor = SurfaceDark
-                                )
-                            )
-
-                            // Chips de destinos frecuentes en La Rioja
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                items(RIOJA_DESTINATIONS) { preset ->
-                                    val isSelected = destLocation?.first == preset.lat && destLocation?.second == preset.lng
-                                    Surface(
-                                        modifier = Modifier.clickable {
-                                            viewModel.setDestination(preset.title, preset.lat, preset.lng)
-                                        },
-                                        shape = RoundedCornerShape(20.dp),
-                                        color = if (isSelected) RiojaOrange.copy(alpha = 0.2f) else SurfaceVariant,
-                                        border = BorderStroke(
-                                            1.dp,
-                                            if (isSelected) RiojaOrange else DividerColor
+                    AppCard {
+                        AppTextField(
+                            value = destDescription,
+                            onValueChange = { viewModel.onDestinationTextChanged(it) },
+                            placeholder = "¿A dónde querés ir en La Rioja?",
+                            leadingIcon = Icons.Outlined.Search,
+                            trailingIcon = if (destDescription.isNotBlank()) {
+                                {
+                                    IconButton(onClick = { viewModel.onDestinationTextChanged("") }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Limpiar",
+                                            tint = TextMuted,
+                                            modifier = Modifier.size(18.dp)
                                         )
+                                    }
+                                }
+                            } else null
+                        )
+
+                        if (suggestions.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(Dimens.sm))
+                            Column(verticalArrangement = Arrangement.spacedBy(Dimens.sm - Dimens.xs)) {
+                                suggestions.take(6).forEach { suggestion ->
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.selectSuggestion(suggestion) },
+                                        shape = RoundedCornerShape(Dimens.radiusSm),
+                                        color = SurfaceVariant,
+                                        border = BorderStroke(1.dp, DividerColor)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            modifier = Modifier.padding(horizontal = Dimens.md, vertical = Dimens.sm + 2.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Default.Place,
                                                 contentDescription = null,
-                                                tint = if (isSelected) RiojaOrange else TextMuted,
-                                                modifier = Modifier.size(14.dp)
+                                                tint = RiojaOrange,
+                                                modifier = Modifier.size(16.dp)
                                             )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = preset.title,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (isSelected) RiojaOrange else TextSecondary,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                            )
+                                            Spacer(modifier = Modifier.width(Dimens.sm))
+                                            Column {
+                                                Text(
+                                                    text = suggestion.nombre,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = TextPrimary,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = suggestion.detalle,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = TextMuted,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(Dimens.md))
 
-                            // Botón Planificar (RiojaOrange, ancho completo)
-                            Button(
-                                onClick = { viewModel.planTrip() },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = RiojaOrange),
-                                enabled = !isLoading
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AltRoute,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Planificar",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                        Row(horizontalArrangement = Arrangement.spacedBy(Dimens.sm)) {
+                            RIOJA_DESTINATIONS.take(2).forEach { preset ->
+                                val isSelected = destLocation?.first == preset.lat && destLocation?.second == preset.lng
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        viewModel.setDestination(preset.title, preset.lat, preset.lng, preset.subtitle)
+                                    },
+                                    label = { Text(preset.title) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = RiojaOrange,
+                                        selectedLabelColor = Color.White,
+                                        containerColor = SurfaceVariant,
+                                        labelColor = TextSecondary
+                                    ),
+                                    border = FilterChipDefaults.filterChipBorder(
+                                        borderColor = if (isSelected) RiojaOrange else DividerColor,
+                                        enabled = true,
+                                        selected = isSelected
+                                    )
                                 )
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(Dimens.lg))
+
+                        SectionTitle(text = "Tus destinos frecuentes")
+
+                        if (frequentDestinations.isEmpty()) {
+                            Text(
+                                text = "Acá van a aparecer los lugares a los que viajás seguido.",
+                                color = TextMuted,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(Dimens.sm)) {
+                                frequentDestinations.forEach { destination ->
+                                    FrequentDestinationRow(
+                                        destination = destination,
+                                        onClick = { viewModel.selectFrequent(destination) },
+                                        onRemove = { viewModel.removeFrequent(destination.key) }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(Dimens.lg))
+
+                        PrimaryButton(
+                            text = "Buscar recorrido",
+                            onClick = { viewModel.planTrip() },
+                            enabled = destLocation != null,
+                            loading = isLoading,
+                            icon = Icons.Default.AltRoute
+                        )
                     }
                 }
 
@@ -367,6 +365,17 @@ fun TripPlannerScreen(
                         TripResultsHeader(
                             tripPlan = tripPlan!!,
                             onClear = { viewModel.clearPlan() }
+                        )
+                    }
+
+                    item {
+                        TripPlanMapView(
+                            tripPlan = tripPlan!!,
+                            tileUrl = tileUrl,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(240.dp)
+                                .clip(RoundedCornerShape(16.dp))
                         )
                     }
 
@@ -397,10 +406,182 @@ fun TripPlannerScreen(
             if (isLoading) {
                 TripLoadingOverlay()
             }
+
+            if (showOriginSheet) {
+                OriginSheet(
+                    suggestions = originSuggestions,
+                    onUseGps = {
+                        if (hasLocationPermission) {
+                            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                                loc?.let { viewModel.setOriginFromGps(it.latitude, it.longitude) }
+                                    ?: viewModel.setOriginFromGps(-29.4134003, -66.8560292)
+                            }
+                        } else {
+                            requestPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                        showOriginSheet = false
+                    },
+                    onQueryChanged = { viewModel.onOriginQueryChanged(it) },
+                    onSelectSuggestion = { suggestion ->
+                        viewModel.selectOriginSuggestion(suggestion)
+                        showOriginSheet = false
+                    },
+                    onDismiss = { showOriginSheet = false }
+                )
+            }
         }
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FrequentDestinationRow(
+    destination: FrequentDestination,
+    onClick: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Dimens.radiusSm),
+        color = SurfaceVariant,
+        border = BorderStroke(1.dp, DividerColor),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = Dimens.md, vertical = Dimens.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.History,
+                contentDescription = null,
+                tint = RiojaOrange,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(Dimens.md))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = destination.nombre,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = destination.detalle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            StatusPill(
+                text = "${destination.vecesUsado} ${if (destination.vecesUsado == 1) "viaje" else "viajes"}",
+                color = RiojaOrange
+            )
+            IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Quitar de frecuentes",
+                    tint = TextMuted,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OriginSheet(
+    suggestions: List<PlaceSuggestion>,
+    onUseGps: () -> Unit,
+    onQueryChanged: (String) -> Unit,
+    onSelectSuggestion: (PlaceSuggestion) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+
+    AppBottomSheet(onDismissRequest = onDismiss) {
+        Text(
+            text = "Punto de partida",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = TextPrimary
+        )
+
+        Spacer(modifier = Modifier.height(Dimens.lg))
+
+        SecondaryButton(
+            text = "Usar mi ubicación actual",
+            onClick = onUseGps,
+            icon = Icons.Outlined.MyLocation
+        )
+
+        Spacer(modifier = Modifier.height(Dimens.md))
+
+        AppTextField(
+            value = query,
+            onValueChange = {
+                query = it
+                onQueryChanged(it)
+            },
+            placeholder = "Buscá una dirección o lugar",
+            leadingIcon = Icons.Outlined.Search
+        )
+
+        if (suggestions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(Dimens.sm))
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.sm - Dimens.xs)) {
+                suggestions.take(6).forEach { suggestion ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectSuggestion(suggestion) },
+                        shape = RoundedCornerShape(Dimens.radiusSm),
+                        color = SurfaceVariant,
+                        border = BorderStroke(1.dp, DividerColor)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = Dimens.md, vertical = Dimens.sm + 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Place,
+                                contentDescription = null,
+                                tint = RiojaOrange,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(Dimens.sm))
+                            Column {
+                                Text(
+                                    text = suggestion.nombre,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = suggestion.detalle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 @Composable
 fun TripResultsHeader(
     tripPlan: TripPlan,
@@ -419,7 +600,7 @@ fun TripResultsHeader(
                 color = TextPrimary
             )
             Text(
-                text = "${tripPlan.pasos.size} pasos en tu itinerario",
+                text = "${tripPlan.pasos.size} pasos en tu itinerario · ≈ ${tripPlan.duracionEstimadaMin} min",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
@@ -862,3 +1043,133 @@ fun TripLoadingOverlay() {
         }
     }
 }
+
+/**
+ * Mapa embebido del itinerario: polylines de los tramos en colectivo,
+ * marcadores de paradas de subida/bajada/transbordo y puntos de origen/destino.
+ */
+@Composable
+fun TripPlanMapView(
+    tripPlan: TripPlan,
+    tileUrl: String?,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+
+    val lifecycleMap = mapViewRef
+    DisposableEffect(lifecycleOwner, lifecycleMap) {
+        val map = lifecycleMap
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> map?.onResume()
+                Lifecycle.Event.ON_PAUSE -> map?.onPause()
+                Lifecycle.Event.ON_DESTROY -> map?.onDetach()
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            map?.onDetach()
+        }
+    }
+
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            Configuration.getInstance().userAgentValue = ctx.packageName
+            MapView(ctx).apply {
+                setTileSource(createTileSource(tileUrl))
+                setMultiTouchControls(true)
+                setDestroyMode(false)
+                isTilesScaledToDpi = true
+                zoomController.setVisibility(
+                    org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER
+                )
+                controller.setZoom(13.0)
+                controller.setCenter(GeoPoint(-29.4134003, -66.8560292))
+                mapViewRef = this
+            }
+        },
+        update = { mapView ->
+            val target = createTileSource(tileUrl)
+            if (mapView.tileProvider.tileSource.name() != target.name()) {
+                mapView.setTileSource(target)
+            }
+
+            mapView.overlays.clear()
+
+            val allPoints = mutableListOf<GeoPoint>()
+
+            // Polylines de los tramos en colectivo (naranja la primera, azul la segunda)
+            val busSteps = tripPlan.pasos.filter { it.tipo == TripStepType.TOMAR_COLECTIVO }
+            busSteps.forEachIndexed { index, step ->
+                val points = step.recorrido.map { GeoPoint(it.lat, it.lng) }
+                if (points.size >= 2) {
+                    allPoints.addAll(points)
+                    val polyline = Polyline(mapView).apply {
+                        outlinePaint.color = (if (index == 0) RiojaOrange else InfoBlue).toArgb()
+                        outlinePaint.strokeWidth = 8f
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                        setPoints(points)
+                    }
+                    mapView.overlays.add(0, polyline)
+                }
+            }
+
+            // Marcadores de paradas de subida, bajada y transbordo
+            val stopIcon = createStopMarkerDrawable(context)
+            tripPlan.pasos.forEach { step ->
+                listOfNotNull(step.paradaOrigen, step.paradaDestino).forEach { parada ->
+                    val point = GeoPoint(parada.lat, parada.lng)
+                    allPoints.add(point)
+                    val marker = Marker(mapView).apply {
+                        position = point
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        icon = stopIcon
+                        title = parada.nombreParada ?: "Parada ${parada.codParada ?: ""}"
+                    }
+                    mapView.overlays.add(marker)
+                }
+            }
+
+            // Marcador de origen (azul) y destino (naranja)
+            tripPlan.origen?.let { (lat, lng) ->
+                val point = GeoPoint(lat, lng)
+                allPoints.add(point)
+                mapView.overlays.add(
+                    Marker(mapView).apply {
+                        position = point
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        icon = createPointMarkerDrawable(context, MapUserColor.toArgb())
+                        title = "Origen"
+                    }
+                )
+            }
+            tripPlan.destino?.let { (lat, lng) ->
+                val point = GeoPoint(lat, lng)
+                allPoints.add(point)
+                mapView.overlays.add(
+                    Marker(mapView).apply {
+                        position = point
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                        icon = createPointMarkerDrawable(context, RiojaOrange.toArgb())
+                        title = "Destino"
+                    }
+                )
+            }
+
+            if (allPoints.size >= 2) {
+                try {
+                    mapView.zoomToBoundingBox(BoundingBox.fromGeoPoints(allPoints), false, 100)
+                } catch (_: Exception) {
+                }
+            }
+            mapView.invalidate()
+        }
+    )
+}
+

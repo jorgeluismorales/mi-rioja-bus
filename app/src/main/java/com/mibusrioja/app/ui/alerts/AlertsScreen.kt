@@ -1,5 +1,9 @@
 package com.mibusrioja.app.ui.alerts
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -28,12 +32,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mibusrioja.app.domain.model.Alert
 import com.mibusrioja.app.domain.model.BusLine
 import com.mibusrioja.app.domain.model.LineGroup
 import com.mibusrioja.app.domain.model.RouteNode
+import com.mibusrioja.app.ui.components.AppBottomSheet
+import com.mibusrioja.app.ui.components.AppCard
+import com.mibusrioja.app.ui.components.AppTextField
+import com.mibusrioja.app.ui.components.Dimens
+import com.mibusrioja.app.ui.components.EmptyState
+import com.mibusrioja.app.ui.components.ErrorBanner
+import com.mibusrioja.app.ui.components.PrimaryButton
+import com.mibusrioja.app.ui.components.ScreenHeader
+import com.mibusrioja.app.ui.components.StatusPill
 import com.mibusrioja.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,32 +63,36 @@ fun AlertsScreen(
     val isCreating by viewModel.isCreating.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
 
-    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
-    LaunchedEffect(error) {
-        error?.let {
-            snackbarHostState.showSnackbar(it)
-            viewModel.clearError()
+    // Pedir permisos de ubicación antes de abrir el sheet de creación
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        viewModel.showCreateDialog()
+    }
+
+    fun requestCreateAlert() {
+        val fine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) {
+            viewModel.showCreateDialog()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
         }
     }
 
     Scaffold(
-        containerColor = Background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { viewModel.showCreateDialog() },
-                containerColor = RiojaOrange,
-                contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Agregar alerta"
-                )
-            }
-        }
+        containerColor = Background
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -81,53 +100,48 @@ fun AlertsScreen(
                 .padding(innerPadding)
                 .padding(horizontal = 16.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(Dimens.lg))
 
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Mis Alertas",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
-                    Text(
-                        text = "Avisos de proximidad a tus paradas",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
-                }
-
-                if (alerts.isNotEmpty()) {
-                    val activeCount = alerts.count { it.activa }
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (activeCount > 0) RiojaOrange.copy(alpha = 0.15f) else SurfaceVariant,
-                        border = BorderStroke(1.dp, if (activeCount > 0) RiojaOrange.copy(alpha = 0.4f) else DividerColor)
-                    ) {
-                        Text(
+            ScreenHeader(
+                title = "Mis Alertas",
+                subtitle = "Avisos de proximidad a tus paradas",
+                trailing = {
+                    if (alerts.isNotEmpty()) {
+                        val activeCount = alerts.count { it.activa }
+                        StatusPill(
                             text = "$activeCount activas",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (activeCount > 0) RiojaOrange else TextMuted,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            color = if (activeCount > 0) RiojaOrange else TextMuted
                         )
                     }
                 }
+            )
+
+            Spacer(modifier = Modifier.height(Dimens.lg))
+
+            if (error != null) {
+                ErrorBanner(
+                    message = error.orEmpty(),
+                    onDismiss = { viewModel.clearError() }
+                )
+                Spacer(modifier = Modifier.height(Dimens.md))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
             if (alerts.isEmpty()) {
-                EmptyAlertsState(
-                    onAddClick = { viewModel.showCreateDialog() }
+                EmptyState(
+                    icon = Icons.Outlined.DirectionsBus,
+                    title = "Todavía no tenés alertas",
+                    message = "Te avisamos cuando vos o tu colectivo se acerquen a la parada que elijas.",
+                    actionLabel = "Crear primera alerta de proximidad",
+                    onAction = { requestCreateAlert() },
+                    modifier = Modifier.weight(1f)
                 )
             } else {
+                PrimaryButton(
+                    text = "Nueva alerta",
+                    onClick = { requestCreateAlert() },
+                    icon = Icons.Default.Add
+                )
+                Spacer(modifier = Modifier.height(Dimens.md))
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -175,22 +189,14 @@ fun AlertCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (alert.activa) SurfaceCard.copy(alpha = 0.9f) else SurfaceDark.copy(alpha = 0.6f)
-        ),
+    AppCard(
+        modifier = modifier,
+        containerColor = if (alert.activa) SurfaceCard else SurfaceDark.copy(alpha = 0.6f),
         border = BorderStroke(
             width = 1.dp,
             color = if (alert.activa) GlassBorder else DividerColor.copy(alpha = 0.4f)
         )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
             // Fila superior: Línea, Transbordo badge, Botón eliminar
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -218,30 +224,10 @@ fun AlertCard(
 
                     // Badge de Transbordo Automático si aplica
                     if (alert.isTransbordo) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = RiojaAmber.copy(alpha = 0.18f),
-                            border = BorderStroke(1.dp, RiojaAmber.copy(alpha = 0.5f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = RiojaAmber,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "Transbordo automático",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = RiojaAmber
-                                )
-                            }
-                        }
+                        StatusPill(
+                            text = "Transbordo automático",
+                            color = RiojaAmber
+                        )
                     }
                 }
 
@@ -318,83 +304,6 @@ fun AlertCard(
                     )
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun EmptyAlertsState(
-    onAddClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(bottom = 60.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(CircleShape)
-                    .background(SurfaceCard)
-                    .border(1.dp, GlassBorder, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.DirectionsBus,
-                    contentDescription = null,
-                    tint = RiojaOrange,
-                    modifier = Modifier.size(48.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Text(
-                text = "Todavía no tenés alertas",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "Creá alertas de proximidad para recibir notificaciones cuando tu colectivo se acerque a tu parada.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = onAddClick,
-                colors = ButtonDefaults.buttonColors(containerColor = RiojaOrange),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.AddAlert,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Crear primera alerta",
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-        }
     }
 }
 
@@ -418,18 +327,10 @@ fun CreateAlertBottomSheet(
         return group.lineas + group.subGrupos.flatMap { flattenLines(it) }
     }
 
-    ModalBottomSheet(
+    AppBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = SurfaceDark,
-        dragHandle = { BottomSheetDefaults.DragHandle(color = TextMuted) }
+        sheetState = sheetState
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
-        ) {
             // Cabecera con indicador de pasos
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -514,22 +415,11 @@ fun CreateAlertBottomSheet(
                     }
 
                     var lineFilter by remember { mutableStateOf("") }
-                    OutlinedTextField(
+                    AppTextField(
                         value = lineFilter,
                         onValueChange = { lineFilter = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Buscar línea por número o nombre...", color = TextMuted) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = RiojaOrange,
-                            unfocusedBorderColor = DividerColor,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceCard,
-                            unfocusedContainerColor = SurfaceCard
-                        ),
-                        shape = RoundedCornerShape(12.dp)
+                        placeholder = "Buscar línea por número o nombre...",
+                        leadingIcon = Icons.Default.Search
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -633,22 +523,11 @@ fun CreateAlertBottomSheet(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     var stopSearch by remember { mutableStateOf("") }
-                    OutlinedTextField(
+                    AppTextField(
                         value = stopSearch,
                         onValueChange = { stopSearch = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Buscar parada por nombre o código...", color = TextMuted) },
-                        leadingIcon = { Icon(Icons.Default.Place, contentDescription = null, tint = TextMuted) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = RiojaOrange,
-                            unfocusedBorderColor = DividerColor,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            focusedContainerColor = SurfaceCard,
-                            unfocusedContainerColor = SurfaceCard
-                        ),
-                        shape = RoundedCornerShape(12.dp)
+                        placeholder = "Buscar parada por nombre o código...",
+                        leadingIcon = Icons.Default.Place
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -883,7 +762,6 @@ fun CreateAlertBottomSheet(
                     }
                 }
             }
-        }
     }
 }
 

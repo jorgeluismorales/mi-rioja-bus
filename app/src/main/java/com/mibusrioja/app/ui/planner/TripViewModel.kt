@@ -2,18 +2,30 @@ package com.mibusrioja.app.ui.planner
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mibusrioja.app.data.map.TileSourceProvider
+import com.mibusrioja.app.data.repository.DestinationHistoryRepository
+import com.mibusrioja.app.domain.geofence.GeofenceManager
 import com.mibusrioja.app.domain.model.Alert
 import com.mibusrioja.app.domain.model.BusLine
 import com.mibusrioja.app.domain.model.LineGroup
+import com.mibusrioja.app.domain.model.FrequentDestination
+import com.mibusrioja.app.domain.model.PlaceSuggestion
 import com.mibusrioja.app.domain.model.TripPlan
 import com.mibusrioja.app.domain.model.TripStepType
 import com.mibusrioja.app.domain.usecase.CreateAlertUseCase
+import com.mibusrioja.app.domain.usecase.FindExistingAlertUseCase
+import com.mibusrioja.app.domain.usecase.GetConfigUseCase
 import com.mibusrioja.app.domain.usecase.GetLinesUseCase
 import com.mibusrioja.app.domain.usecase.PlanTripUseCase
+import com.mibusrioja.app.domain.usecase.SearchPlacesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -39,7 +51,13 @@ val RIOJA_DESTINATIONS = listOf(
 class TripViewModel @Inject constructor(
     private val planTripUseCase: PlanTripUseCase,
     private val createAlertUseCase: CreateAlertUseCase,
-    private val getLinesUseCase: GetLinesUseCase
+    private val findExistingAlertUseCase: FindExistingAlertUseCase,
+    private val getLinesUseCase: GetLinesUseCase,
+    private val searchPlacesUseCase: SearchPlacesUseCase,
+    private val getConfigUseCase: GetConfigUseCase,
+    private val tileSourceProvider: TileSourceProvider,
+    private val geofenceManager: GeofenceManager,
+    private val destinationHistoryRepository: DestinationHistoryRepository
 ) : ViewModel() {
 
     private val _tripPlan = MutableStateFlow<TripPlan?>(null)
@@ -60,14 +78,39 @@ class TripViewModel @Inject constructor(
     private val _destLocation = MutableStateFlow<Pair<Double, Double>?>(null)
     val destLocation: StateFlow<Pair<Double, Double>?> = _destLocation.asStateFlow()
 
+    private val _suggestions = MutableStateFlow<List<PlaceSuggestion>>(emptyList())
+    val suggestions: StateFlow<List<PlaceSuggestion>> = _suggestions.asStateFlow()
+
     private val _alertsAutoCreated = MutableStateFlow(0)
     val alertsAutoCreated: StateFlow<Int> = _alertsAutoCreated.asStateFlow()
 
     private val _availableLines = MutableStateFlow<List<BusLine>>(emptyList())
     val availableLines: StateFlow<List<BusLine>> = _availableLines.asStateFlow()
 
+    private val _tileUrl = MutableStateFlow<String?>(null)
+    val tileUrl: StateFlow<String?> = _tileUrl.asStateFlow()
+
+    val frequentDestinations: StateFlow<List<FrequentDestination>> =
+        destinationHistoryRepository.frequent
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _originLabel = MutableStateFlow("Tu ubicación actual")
+    val originLabel: StateFlow<String> = _originLabel.asStateFlow()
+
+    private val _originIsGps = MutableStateFlow(true)
+    val originIsGps: StateFlow<Boolean> = _originIsGps.asStateFlow()
+
+    private val _originSuggestions = MutableStateFlow<List<PlaceSuggestion>>(emptyList())
+    val originSuggestions: StateFlow<List<PlaceSuggestion>> = _originSuggestions.asStateFlow()
+
+    private var destDetail: String = ""
+
+    private var searchJob: Job? = null
+    private var originSearchJob: Job? = null
+
     init {
         loadLines()
+        resolveTiles()
     }
 
     private fun loadLines() {
@@ -78,27 +121,96 @@ class TripViewModel @Inject constructor(
         }
     }
 
+    private fun resolveTiles() {
+        viewModelScope.launch {
+            getConfigUseCase().onSuccess { config ->
+                _tileUrl.value = tileSourceProvider.resolve(config)
+            }
+        }
+    }
+
     private fun flattenLines(group: LineGroup): List<BusLine> {
         return group.lineas + group.subGrupos.flatMap { flattenLines(it) }
     }
 
     fun setOriginFromGps(lat: Double, lng: Double) {
-        _originLocation.value = Pair(lat, lng)
+        useGpsOrigin(lat, lng)
     }
 
-    fun setDestination(description: String, lat: Double, lng: Double) {
+    fun useGpsOrigin(lat: Double, lng: Double) {
+        _originLocation.value = Pair(lat, lng)
+        _originLabel.value = "Tu ubicación actual"
+        _originIsGps.value = true
+    }
+
+    fun onOriginQueryChanged(text: String) {
+        originSearchJob?.cancel()
+        originSearchJob = debouncedSearch(text, _originSuggestions)
+    }
+
+    fun selectOriginSuggestion(suggestion: PlaceSuggestion) {
+        _originLocation.value = Pair(suggestion.lat, suggestion.lng)
+        _originLabel.value = suggestion.nombre
+        _originIsGps.value = false
+        _originSuggestions.value = emptyList()
+    }
+
+    fun clearOriginSuggestions() {
+        _originSuggestions.value = emptyList()
+    }
+
+    fun setDestination(description: String, lat: Double, lng: Double, detail: String = "") {
         _destDescription.value = description
         _destLocation.value = Pair(lat, lng)
+        destDetail = detail
+        _suggestions.value = emptyList()
     }
 
-    fun setDestinationDescription(description: String) {
-        _destDescription.value = description
-        // Si el texto coincide exactamente con algún preset, asociamos automáticamente las coordenadas
-        val match = RIOJA_DESTINATIONS.firstOrNull { it.title.equals(description.trim(), ignoreCase = true) }
+    fun onDestinationTextChanged(text: String) {
+        _destDescription.value = text
+
+        val match = RIOJA_DESTINATIONS.firstOrNull { it.title.equals(text.trim(), ignoreCase = true) }
         if (match != null) {
             _destLocation.value = Pair(match.lat, match.lng)
-        } else if (_destLocation.value != null && description.isBlank()) {
+            destDetail = match.subtitle
+        } else if (_destLocation.value != null && text.isBlank()) {
             _destLocation.value = null
+        }
+
+        searchJob?.cancel()
+        searchJob = debouncedSearch(text, _suggestions)
+    }
+
+    private fun debouncedSearch(
+        text: String,
+        target: MutableStateFlow<List<PlaceSuggestion>>
+    ): Job? {
+        if (text.trim().length < 3) {
+            target.value = emptyList()
+            return null
+        }
+        return viewModelScope.launch {
+            delay(350)
+            searchPlacesUseCase(text.trim())
+                .onSuccess { target.value = it }
+                .onFailure { target.value = emptyList() }
+        }
+    }
+
+    fun selectSuggestion(suggestion: PlaceSuggestion) {
+        _destDescription.value = suggestion.nombre
+        _destLocation.value = Pair(suggestion.lat, suggestion.lng)
+        destDetail = suggestion.detalle
+        _suggestions.value = emptyList()
+    }
+
+    fun selectFrequent(destination: FrequentDestination) {
+        setDestination(destination.nombre, destination.lat, destination.lng, destination.detalle)
+    }
+
+    fun removeFrequent(key: String) {
+        viewModelScope.launch {
+            destinationHistoryRepository.remove(key)
         }
     }
 
@@ -137,39 +249,13 @@ class TripViewModel @Inject constructor(
             ).fold(
                 onSuccess = { plan ->
                     _tripPlan.value = plan
-
-                    // Auto-crear alertas de 100m para pasos de TRANSBORDO
-                    var autoCreatedCount = 0
-                    val steps = plan.pasos
-                    for (i in steps.indices) {
-                        val step = steps[i]
-                        if (step.tipo == TripStepType.TRANSBORDO) {
-                            val transferStop = step.paradaOrigen
-                            val nextStepWithLine = steps.drop(i + 1).firstOrNull { it.linea != null }
-                            val busLine = nextStepWithLine?.linea ?: step.linea
-
-                            if (transferStop != null) {
-                                try {
-                                    val alert = Alert(
-                                        codLinea = busLine?.codLinea ?: "TRANSBORDO",
-                                        lineaDescripcion = busLine?.descripcion ?: "Combinación de línea",
-                                        codParada = transferStop.codParada ?: "TRANSBORDO",
-                                        paradaDescripcion = transferStop.nombreParada ?: "Parada de transbordo",
-                                        distanciaMetros = 100, // Alerta automática a 100 metros
-                                        latParada = transferStop.lat,
-                                        lngParada = transferStop.lng,
-                                        activa = true,
-                                        isTransbordo = true
-                                    )
-                                    createAlertUseCase(alert)
-                                    autoCreatedCount++
-                                } catch (e: Exception) {
-                                    // Continuar con el resto de alertas
-                                }
-                            }
-                        }
-                    }
-                    _alertsAutoCreated.value = autoCreatedCount
+                    destinationHistoryRepository.registerVisit(
+                        nombre = _destDescription.value,
+                        detalle = destDetail,
+                        lat = dest.first,
+                        lng = dest.second
+                    )
+                    _alertsAutoCreated.value = createAutoAlerts(plan)
                 },
                 onFailure = { throwable ->
                     _error.value = throwable.message ?: "No se pudo calcular la ruta para tu viaje"
@@ -178,6 +264,64 @@ class TripViewModel @Inject constructor(
 
             _isLoading.value = false
         }
+    }
+
+    /**
+     * Crea alertas automáticas de 100 m en cada transbordo y en la parada
+     * de bajada final, evitando duplicar alertas existentes.
+     */
+    private suspend fun createAutoAlerts(plan: TripPlan): Int {
+        var created = 0
+        val steps = plan.pasos
+        val busSteps = steps.filter { it.tipo == TripStepType.TOMAR_COLECTIVO }
+
+        val candidates = mutableListOf<Pair<BusLine, com.mibusrioja.app.domain.model.RouteNode>>()
+
+        for (i in steps.indices) {
+            val step = steps[i]
+            if (step.tipo == TripStepType.TRANSBORDO) {
+                val prevBus = steps.take(i).lastOrNull { it.tipo == TripStepType.TOMAR_COLECTIVO }
+                val line = prevBus?.linea ?: step.linea
+                val stop = step.paradaOrigen
+                if (line != null && stop?.codParada != null) {
+                    candidates.add(line to stop)
+                }
+            }
+        }
+
+        busSteps.lastOrNull()?.let { last ->
+            val stop = last.paradaDestino
+            if (last.linea != null && stop?.codParada != null) {
+                candidates.add(last.linea!! to stop)
+            }
+        }
+
+        for ((line, stop) in candidates) {
+            val codParada = stop.codParada ?: continue
+            try {
+                if (findExistingAlertUseCase(line.codLinea, codParada) != null) continue
+                createAlertUseCase(
+                    Alert(
+                        codLinea = line.codLinea,
+                        lineaDescripcion = line.descripcion,
+                        codParada = codParada,
+                        paradaDescripcion = stop.nombreParada ?: "Parada de transbordo",
+                        distanciaMetros = 100,
+                        latParada = stop.lat,
+                        lngParada = stop.lng,
+                        activa = true,
+                        isTransbordo = true
+                    )
+                )
+                created++
+            } catch (_: Exception) {
+            }
+        }
+
+        if (created > 0) {
+            geofenceManager.startMonitoring()
+        }
+        return created
     }
 
     fun clearPlan() {

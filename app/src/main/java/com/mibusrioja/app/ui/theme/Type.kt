@@ -4,10 +4,26 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.googlefonts.Font
+import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
+import com.mibusrioja.app.R
 
-// Inter font family representation using default system sans-serif font
-val InterFontFamily: FontFamily = FontFamily.SansSerif
+private val fontProvider = GoogleFont.Provider(
+    providerAuthority = "com.google.android.gms.fonts",
+    providerPackage = "com.google.android.gms",
+    certificates = R.array.com_google_android_gms_fonts_certs
+)
+
+private val interFont = GoogleFont("Inter")
+
+// Inter descargada desde Google Fonts con fallback a la sans-serif del sistema
+val InterFontFamily: FontFamily = FontFamily(
+    Font(googleFont = interFont, fontProvider = fontProvider, weight = FontWeight.Normal),
+    Font(googleFont = interFont, fontProvider = fontProvider, weight = FontWeight.Medium),
+    Font(googleFont = interFont, fontProvider = fontProvider, weight = FontWeight.SemiBold),
+    Font(googleFont = interFont, fontProvider = fontProvider, weight = FontWeight.Bold)
+)
 
 val Typography = Typography(
     displayLarge = TextStyle(

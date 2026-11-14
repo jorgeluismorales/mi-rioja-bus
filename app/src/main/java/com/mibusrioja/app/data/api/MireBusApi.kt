@@ -1,7 +1,9 @@
 package com.mibusrioja.app.data.api
 
 import com.mibusrioja.app.data.api.model.*
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -26,34 +28,31 @@ interface MireBusApi {
      * Posición en tiempo real de todos los colectivos de una línea.
      * Se debe llamar con polling cada 15s.
      */
-    @GET("rest/posicion/{codLinea}")
+    @GET("rest/posicionesBuses/{codLinea}")
     suspend fun getPosicionBuses(@Path("codLinea") codLinea: String): PosicionResponse
 
     /**
      * Tiempos estimados de llegada a una parada específica.
      * "Cuando viene"
      */
-    @GET("rest/paradasCercanas/{codLinea}/{codParada}")
-    suspend fun getParadasCercanas(
+    @GET("rest/horariosEstimados/{codLinea}/{codParada}")
+    suspend fun getHorariosEstimados(
         @Path("codLinea") codLinea: String,
         @Path("codParada") codParada: String
-    ): ParadasCercanasResponse
+    ): HorariosEstimadosResponse
 
-    /** Puntos de venta/recarga de tarjetas */
-    @GET("rest/getPuntosVentaCercanos")
+    /** Puntos de venta/recarga de tarjetas cercanos a una coordenada */
+    @GET("rest/getPuntosVentaCercanos/{lat}/{lng}/1")
     suspend fun getPuntosVenta(
-        @Query("lat") lat: Double? = null,
-        @Query("lng") lng: Double? = null
+        @Path("lat") lat: Double,
+        @Path("lng") lng: Double
     ): PuntosVentaResponse
 
     /** Consulta de saldo de tarjeta (sin login) */
-    @GET("rest/checkCardCredit")
-    suspend fun checkCardCredit(
-        @Query("nroTarjeta") nroTarjeta: String,
-        @Query("captcha") captcha: String? = null
-    ): SaldoResponse
+    @POST("rest/tarjetaInternal/resultadoSaldo")
+    suspend fun checkCardCredit(@Body body: SaldoRequest): SaldoResponse
 
-    /** Captcha image — se muestra como WebView o imagen */
+    /** Imagen de captcha atada a la cookie de sesión */
     @GET("captcha.png")
-    suspend fun getCaptcha(): okhttp3.ResponseBody
+    suspend fun getCaptcha(@Query("t") timestamp: Long): okhttp3.ResponseBody
 }

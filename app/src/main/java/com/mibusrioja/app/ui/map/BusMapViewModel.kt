@@ -11,7 +11,8 @@ import com.mibusrioja.app.domain.model.TiempoEstimado
 import com.mibusrioja.app.domain.usecase.GetBusPositionsUseCase
 import com.mibusrioja.app.domain.usecase.GetConfigUseCase
 import com.mibusrioja.app.domain.usecase.GetLinesUseCase
-import com.mibusrioja.app.domain.usecase.GetParadasCercanasUseCase
+import com.mibusrioja.app.data.map.TileSourceProvider
+import com.mibusrioja.app.domain.usecase.GetArrivalTimesUseCase
 import com.mibusrioja.app.domain.usecase.GetRouteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -19,7 +20,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,7 +34,8 @@ class BusMapViewModel @Inject constructor(
     private val getConfigUseCase: GetConfigUseCase,
     private val getRouteUseCase: GetRouteUseCase,
     private val getBusPositionsUseCase: GetBusPositionsUseCase,
-    private val getParadasCercanasUseCase: GetParadasCercanasUseCase
+    private val getArrivalTimesUseCase: GetArrivalTimesUseCase,
+    private val tileSourceProvider: TileSourceProvider
 ) : ViewModel() {
 
     private val _lineGroups = MutableStateFlow<List<LineGroup>>(emptyList())
@@ -44,6 +49,22 @@ class BusMapViewModel @Inject constructor(
 
     private val _busPositions = MutableStateFlow<List<BusPosition>>(emptyList())
     val busPositions: StateFlow<List<BusPosition>> = _busPositions.asStateFlow()
+
+    private val _showStops = MutableStateFlow(true)
+    val showStops: StateFlow<Boolean> = _showStops.asStateFlow()
+
+    private val _onlyRampa = MutableStateFlow(false)
+    val onlyRampa: StateFlow<Boolean> = _onlyRampa.asStateFlow()
+
+    val visibleBuses: StateFlow<List<BusPosition>> = combine(_busPositions, _onlyRampa) { buses, onlyRampa ->
+        if (onlyRampa) buses.filter { it.tieneRampa } else buses
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedBus = MutableStateFlow<BusPosition?>(null)
+    val selectedBus: StateFlow<BusPosition?> = _selectedBus.asStateFlow()
+
+    private val _lastBusUpdateMillis = MutableStateFlow<Long?>(null)
+    val lastBusUpdateMillis: StateFlow<Long?> = _lastBusUpdateMillis.asStateFlow()
 
     private val _selectedStop = MutableStateFlow<RouteNode?>(null)
     val selectedStop: StateFlow<RouteNode?> = _selectedStop.asStateFlow()
@@ -63,6 +84,9 @@ class BusMapViewModel @Inject constructor(
     private val _appConfig = MutableStateFlow<AppConfig?>(null)
     val appConfig: StateFlow<AppConfig?> = _appConfig.asStateFlow()
 
+    private val _tileUrl = MutableStateFlow<String?>(null)
+    val tileUrl: StateFlow<String?> = _tileUrl.asStateFlow()
+
     private var busPollingJob: Job? = null
 
     init {
@@ -81,6 +105,7 @@ class BusMapViewModel @Inject constructor(
             getConfigUseCase().fold(
                 onSuccess = { config ->
                     _appConfig.value = config
+                    _tileUrl.value = tileSourceProvider.resolve(config)
                 },
                 onFailure = { e ->
                     _error.value = "Error al cargar la configuración: ${e.localizedMessage ?: "Error de red"}"
@@ -147,6 +172,9 @@ class BusMapViewModel @Inject constructor(
                     getBusPositionsUseCase(codLinea).fold(
                         onSuccess = { positions ->
                             _busPositions.value = positions
+                            _lastBusUpdateMillis.value = System.currentTimeMillis()
+                            _selectedBus.value = _selectedBus.value
+                                ?.let { current -> positions.firstOrNull { it.interno == current.interno } }
                         },
                         onFailure = {
                             // En fallos intermitentes de red durante polling no bloqueamos la UI
@@ -173,7 +201,7 @@ class BusMapViewModel @Inject constructor(
         if (codLinea != null && !codParada.isNullOrBlank()) {
             viewModelScope.launch {
                 _isLoadingArrivals.value = true
-                getParadasCercanasUseCase(codLinea, codParada).fold(
+                getArrivalTimesUseCase(codLinea, codParada).fold(
                     onSuccess = { times ->
                         _stopArrivalTimes.value = times
                     },
@@ -189,6 +217,22 @@ class BusMapViewModel @Inject constructor(
     /**
      * Deselecciona la parada activa y limpia los tiempos de arribo.
      */
+    fun setShowStops(show: Boolean) {
+        _showStops.value = show
+    }
+
+    fun setOnlyRampa(only: Boolean) {
+        _onlyRampa.value = only
+    }
+
+    fun selectBus(interno: String) {
+        _selectedBus.value = _busPositions.value.firstOrNull { it.interno == interno }
+    }
+
+    fun clearSelectedBus() {
+        _selectedBus.value = null
+    }
+
     fun clearSelectedStop() {
         _selectedStop.value = null
         _stopArrivalTimes.value = emptyList()
@@ -212,6 +256,6 @@ class BusMapViewModel @Inject constructor(
     }
 
     companion object {
-        private const val POLLING_INTERVAL_MS = 5_000L
+        private const val POLLING_INTERVAL_MS = 15_000L
     }
 }

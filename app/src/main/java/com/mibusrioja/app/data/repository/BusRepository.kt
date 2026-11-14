@@ -1,27 +1,40 @@
 package com.mibusrioja.app.data.repository
 
 import com.mibusrioja.app.data.api.MireBusApi
+import com.mibusrioja.app.data.api.NominatimApi
 import com.mibusrioja.app.data.api.model.*
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class BusRepository @Inject constructor(
-    private val api: MireBusApi
+    private val api: MireBusApi,
+    private val nominatimApi: NominatimApi
 ) {
-    /** Config general (tarifas, mapa, tiles) */
-    suspend fun getConfiguracion(): Result<ConfigResponse> = runCatching {
-        api.getConfiguracion()
+    @Volatile private var configCache: ConfigResponse? = null
+    @Volatile private var gruposLineasCache: GruposLineasResponse? = null
+    private val rutaLineaCache = ConcurrentHashMap<String, RutaLineaResponse>()
+
+    /** Config general (tarifas, mapa, tiles). Cacheada durante la sesión. */
+    suspend fun getConfiguracion(forceRefresh: Boolean = false): Result<ConfigResponse> = runCatching {
+        if (!forceRefresh) configCache?.let { return@runCatching it }
+        api.getConfiguracion().also { configCache = it }
     }
 
-    /** Árbol de grupos/líneas */
-    suspend fun getGruposLineas(): Result<GruposLineasResponse> = runCatching {
-        api.getGruposLineas()
+    /** Árbol de grupos/líneas. Cacheado durante la sesión. */
+    suspend fun getGruposLineas(forceRefresh: Boolean = false): Result<GruposLineasResponse> = runCatching {
+        if (!forceRefresh) gruposLineasCache?.let { return@runCatching it }
+        api.getGruposLineas().also { gruposLineasCache = it }
     }
 
-    /** Recorrido completo con paradas (polyline) */
-    suspend fun getRutaLinea(codLinea: String): Result<RutaLineaResponse> = runCatching {
-        api.getRutaLinea(codLinea)
+    /** Recorrido completo con paradas (polyline). Cacheado por línea. */
+    suspend fun getRutaLinea(
+        codLinea: String,
+        forceRefresh: Boolean = false
+    ): Result<RutaLineaResponse> = runCatching {
+        if (!forceRefresh) rutaLineaCache[codLinea]?.let { return@runCatching it }
+        api.getRutaLinea(codLinea).also { rutaLineaCache[codLinea] = it }
     }
 
     /** Posición en tiempo real de los buses */
@@ -30,26 +43,30 @@ class BusRepository @Inject constructor(
     }
 
     /** Tiempos de llegada a una parada (cuando viene) */
-    suspend fun getParadasCercanas(
+    suspend fun getHorariosEstimados(
         codLinea: String,
         codParada: String
-    ): Result<ParadasCercanasResponse> = runCatching {
-        api.getParadasCercanas(codLinea, codParada)
+    ): Result<HorariosEstimadosResponse> = runCatching {
+        api.getHorariosEstimados(codLinea, codParada)
     }
 
-    /** Puntos de venta */
-    suspend fun getPuntosVenta(
-        lat: Double? = null,
-        lng: Double? = null
-    ): Result<PuntosVentaResponse> = runCatching {
+    /** Puntos de venta cercanos a una coordenada */
+    suspend fun getPuntosVenta(lat: Double, lng: Double): Result<PuntosVentaResponse> = runCatching {
         api.getPuntosVenta(lat, lng)
     }
 
-    /** Saldo de tarjeta (anónimo) */
-    suspend fun checkCardCredit(
-        nroTarjeta: String,
-        captcha: String? = null
-    ): Result<SaldoResponse> = runCatching {
-        api.checkCardCredit(nroTarjeta, captcha)
+    /** Saldo de tarjeta (anónimo, con captcha de sesión) */
+    suspend fun checkCardCredit(request: SaldoRequest): Result<SaldoResponse> = runCatching {
+        api.checkCardCredit(request)
+    }
+
+    /** Imagen de captcha asociada a la cookie de sesión */
+    suspend fun getCaptcha(): Result<ByteArray> = runCatching {
+        api.getCaptcha(System.currentTimeMillis()).bytes()
+    }
+
+    /** Búsqueda de lugares en La Rioja vía Nominatim */
+    suspend fun searchPlaces(query: String): Result<List<NominatimPlaceDto>> = runCatching {
+        nominatimApi.search(q = query)
     }
 }

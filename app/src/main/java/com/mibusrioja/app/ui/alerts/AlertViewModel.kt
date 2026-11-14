@@ -107,7 +107,9 @@ class AlertViewModel @Inject constructor(
                     isTransbordo = false
                 )
                 createAlertUseCase(alert)
-                geofenceManager.startMonitoring()
+                if (!geofenceManager.startMonitoring()) {
+                    _error.value = "Concedé el permiso de ubicación para activar las alertas"
+                }
                 hideCreateDialog()
             } catch (e: Exception) {
                 _error.value = "Error al crear alerta: ${e.message}"

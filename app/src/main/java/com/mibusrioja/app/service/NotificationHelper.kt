@@ -50,26 +50,32 @@ class NotificationHelper @Inject constructor(
         notifManager.createNotificationChannel(serviceChannel)
     }
 
-    fun buildServiceNotification() = NotificationCompat.Builder(context, CHANNEL_SERVICE_ID)
+    fun buildServiceNotification(alertCount: Int = 0) = NotificationCompat.Builder(context, CHANNEL_SERVICE_ID)
         .setContentTitle("Mi Bus Rioja")
-        .setContentText("Monitoreando alertas de colectivos…")
+        .setContentText(
+            if (alertCount > 0) "Monitoreando $alertCount alertas de colectivo"
+            else "Monitoreando alertas de colectivos…"
+        )
         .setSmallIcon(R.drawable.ic_bus_notification)
         .setOngoing(true)
         .setSilent(true)
         .setContentIntent(openAppIntent())
         .build()
 
+    /**
+     * Notificación de proximidad. [isBusTrigger] distingue los avisos disparados
+     * por la posición del colectivo de los disparados por la ubicación del
+     * usuario, para no pisar los ids de notificación.
+     */
     fun showBusAlertNotification(
         alertId: Long,
-        lineaDesc: String,
-        paradaDesc: String,
-        distanciaMetros: Int
+        title: String,
+        text: String,
+        isBusTrigger: Boolean = false
     ) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS_ID)
-            .setContentTitle(context.getString(R.string.alert_notification_title))
-            .setContentText(
-                "Línea $lineaDesc — a ${distanciaMetros}m de $paradaDesc"
-            )
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(R.drawable.ic_bus_notification)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -77,7 +83,8 @@ class NotificationHelper @Inject constructor(
             .setContentIntent(openAppIntent())
             .build()
 
-        notifManager.notify((NOTIF_ALERT_BASE_ID + alertId).toInt(), notification)
+        val notifId = NOTIF_ALERT_BASE_ID + (alertId * 2).toInt() + if (isBusTrigger) 1 else 0
+        notifManager.notify(notifId, notification)
     }
 
     private fun openAppIntent(): PendingIntent {

@@ -42,10 +42,63 @@ interface AlertDao {
 
     @Query("UPDATE alerts SET activa = :activa WHERE id = :id")
     suspend fun setActive(id: Long, activa: Boolean)
+
+    @Query("SELECT * FROM alerts WHERE codLinea = :codLinea AND codParada = :codParada LIMIT 1")
+    suspend fun findByLineAndStop(codLinea: String, codParada: String): AlertEntity?
+}
+
+// ── Frequent destinations ─────────────────────────────────────────────────────
+@Entity(tableName = "frequent_destinations")
+data class FrequentDestinationEntity(
+    @PrimaryKey val key: String,
+    val nombre: String,
+    val detalle: String,
+    val lat: Double,
+    val lng: Double,
+    val vecesUsado: Int = 1,
+    val ultimoUso: Long = System.currentTimeMillis()
+)
+
+@Dao
+interface FrequentDestinationDao {
+    @Query("SELECT * FROM frequent_destinations ORDER BY vecesUsado DESC, ultimoUso DESC LIMIT :limit")
+    fun getTop(limit: Int = 6): Flow<List<FrequentDestinationEntity>>
+
+    @Query("SELECT * FROM frequent_destinations WHERE key = :key LIMIT 1")
+    suspend fun find(key: String): FrequentDestinationEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(e: FrequentDestinationEntity)
+
+    @Query("DELETE FROM frequent_destinations WHERE key = :key")
+    suspend fun delete(key: String)
 }
 
 // ── Database ──────────────────────────────────────────────────────────────────
-@Database(entities = [AlertEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [AlertEntity::class, FrequentDestinationEntity::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun alertDao(): AlertDao
+    abstract fun frequentDestinationDao(): FrequentDestinationDao
+}
+
+val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS frequent_destinations (
+                key TEXT NOT NULL PRIMARY KEY,
+                nombre TEXT NOT NULL,
+                detalle TEXT NOT NULL,
+                lat REAL NOT NULL,
+                lng REAL NOT NULL,
+                vecesUsado INTEGER NOT NULL,
+                ultimoUso INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
 }

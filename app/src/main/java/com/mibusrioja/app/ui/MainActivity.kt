@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val alertCount by viewModel.alertCount.collectAsStateWithLifecycle()
 
+                CrashReportDialog()
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Background,

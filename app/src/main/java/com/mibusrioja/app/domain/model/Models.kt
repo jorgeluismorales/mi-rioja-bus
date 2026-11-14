@@ -29,7 +29,7 @@ data class BusPosition(
     val orientacion: Float,
     val interno: String,
     val tieneRampa: Boolean,
-    val estaFuera: Boolean
+    val proximaParada: String? = null
 )
 
 // ── Configuración ─────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ data class AppConfig(
     val latCenter: Double = -29.4134003,
     val lngCenter: Double = -66.8560292,
     val urlPrincipalMapas: String = "https://mapmoblrj.red-bus.com.ar/tiles/{z}/{x}/{y}.png",
-    val urlSecundariaMapas: String = "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    val urlSecundariaMapas: String = "",
     val tarifas: List<TarifaItem> = emptyList()
 )
 
@@ -55,7 +55,7 @@ data class PuntoVenta(
     val lat: Double,
     val lng: Double,
     val tipo: TipoPuntoVenta,
-    val horario: String? = null
+    val descripcionTipo: String
 )
 
 // ── Saldo ─────────────────────────────────────────────────────────────────────
@@ -63,16 +63,12 @@ data class Saldo(
     val nroTarjeta: String,
     val saldo: Double,
     val tipo: String,
-    val movimientos: List<Movimiento>
+    val estado: String? = null,
+    val fechaSaldo: String? = null,
+    val etiqueta: String? = null
 )
 
-data class Movimiento(
-    val fecha: String,
-    val monto: Double,
-    val tipo: String,
-    val descripcion: String? = null,
-    val linea: String? = null
-)
+class SaldoException(val code: Int, message: String) : Exception(message)
 
 // ── Alertas ───────────────────────────────────────────────────────────────────
 data class Alert(
@@ -89,8 +85,28 @@ data class Alert(
 )
 
 // ── Planificador ──────────────────────────────────────────────────────────────
+class NoRouteException(message: String) : Exception(message)
+
+data class FrequentDestination(
+    val key: String,
+    val nombre: String,
+    val detalle: String,
+    val lat: Double,
+    val lng: Double,
+    val vecesUsado: Int
+)
+
+data class PlaceSuggestion(
+    val nombre: String,
+    val detalle: String,
+    val lat: Double,
+    val lng: Double
+)
+
 data class TripPlan(
     val pasos: List<TripStep>,
+    val origen: Pair<Double, Double>? = null,
+    val destino: Pair<Double, Double>? = null,
     val duracionEstimadaMin: Int = 0
 )
 
@@ -100,7 +116,8 @@ data class TripStep(
     val paradaOrigen: RouteNode? = null,
     val paradaDestino: RouteNode? = null,
     val instruccion: String,
-    val distanciaMetros: Int = 0
+    val distanciaMetros: Int = 0,
+    val recorrido: List<RouteNode> = emptyList()
 )
 
 enum class TripStepType { CAMINAR, TOMAR_COLECTIVO, TRANSBORDO, LLEGAR }

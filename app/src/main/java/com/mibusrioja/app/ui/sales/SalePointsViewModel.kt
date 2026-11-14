@@ -1,10 +1,12 @@
 package com.mibusrioja.app.ui.sales
 
-import android.location.Location
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mibusrioja.app.data.map.TileSourceProvider
+import com.mibusrioja.app.domain.geo.GeoUtils
 import com.mibusrioja.app.domain.model.PuntoVenta
 import com.mibusrioja.app.domain.model.TipoPuntoVenta
+import com.mibusrioja.app.domain.usecase.GetConfigUseCase
 import com.mibusrioja.app.domain.usecase.GetPuntosVentaUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +20,9 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SalePointsViewModel @Inject constructor(
-    private val getPuntosVentaUseCase: GetPuntosVentaUseCase
+    private val getPuntosVentaUseCase: GetPuntosVentaUseCase,
+    private val getConfigUseCase: GetConfigUseCase,
+    private val tileSourceProvider: TileSourceProvider
 ) : ViewModel() {
 
     private val _puntos = MutableStateFlow<List<PuntoVenta>>(emptyList())
@@ -36,6 +40,9 @@ class SalePointsViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _tileUrl = MutableStateFlow<String?>(null)
+    val tileUrl: StateFlow<String?> = _tileUrl.asStateFlow()
+
     // Filtra por tipo (si fue seleccionado) y ordena por proximidad si la ubicación del usuario está disponible
     val filteredPuntos: StateFlow<List<PuntoVenta>> = combine(
         _puntos,
@@ -50,7 +57,7 @@ class SalePointsViewModel @Inject constructor(
 
         if (userLoc != null) {
             filtered.sortedBy { punto ->
-                calculateDistanceMeters(userLoc.first, userLoc.second, punto.lat, punto.lng)
+                GeoUtils.distanceMeters(userLoc.first, userLoc.second, punto.lat, punto.lng)
             }
         } else {
             filtered
@@ -63,20 +70,30 @@ class SalePointsViewModel @Inject constructor(
 
     init {
         loadPuntos()
+        resolveTiles()
+    }
+
+    private fun resolveTiles() {
+        viewModelScope.launch {
+            getConfigUseCase().onSuccess { config ->
+                _tileUrl.value = tileSourceProvider.resolve(config)
+            }
+        }
     }
 
     /**
      * Carga inicial o recarga de todos los puntos de venta.
+     * La API requiere coordenadas: usa la ubicación del usuario o el centro de La Rioja.
      */
     fun loadPuntos() {
         val loc = _userLocation.value
-        loadNearby(loc?.first, loc?.second)
+        loadNearby(loc?.first ?: LA_RIOJA_LAT, loc?.second ?: LA_RIOJA_LNG)
     }
 
     /**
-     * Carga puntos de venta cercanos a las coordenadas indicadas (o general si son nulas).
+     * Carga puntos de venta cercanos a las coordenadas indicadas.
      */
-    fun loadNearby(lat: Double? = null, lng: Double? = null) {
+    fun loadNearby(lat: Double, lng: Double) {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
@@ -114,14 +131,8 @@ class SalePointsViewModel @Inject constructor(
         loadPuntos()
     }
 
-    private fun calculateDistanceMeters(
-        lat1: Double,
-        lon1: Double,
-        lat2: Double,
-        lon2: Double
-    ): Float {
-        val results = FloatArray(1)
-        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
-        return results[0]
+    companion object {
+        private const val LA_RIOJA_LAT = -29.4134003
+        private const val LA_RIOJA_LNG = -66.8560292
     }
 }

@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AllInclusive
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Atm
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.CenterFocusStrong
@@ -83,6 +84,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.location.LocationServices
+import com.mibusrioja.app.domain.geo.GeoUtils
 import com.mibusrioja.app.domain.model.PuntoVenta
 import com.mibusrioja.app.domain.model.TipoPuntoVenta
 import com.mibusrioja.app.ui.theme.Background
@@ -101,7 +103,7 @@ import com.mibusrioja.app.ui.theme.TextSecondary
 import com.mibusrioja.app.ui.theme.WarningYellow
 import kotlinx.coroutines.launch
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import com.mibusrioja.app.ui.map.createTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -113,6 +115,7 @@ private const val LA_RIOJA_LNG = -66.8560292
 @Composable
 fun SalePointsScreen(
     modifier: Modifier = Modifier,
+    onBack: () -> Unit = {},
     viewModel: SalePointsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -124,6 +127,7 @@ fun SalePointsScreen(
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
+    val tileUrl by viewModel.tileUrl.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
@@ -138,19 +142,13 @@ fun SalePointsScreen(
         if (fineGranted || coarseGranted) {
             obtainUserLocation(context) { lat, lng ->
                 viewModel.updateUserLocation(lat, lng)
+                viewModel.loadNearby(lat, lng)
                 mapViewRef?.controller?.animateTo(GeoPoint(lat, lng))
             }
         }
     }
 
-    // Inicializar OSMDroid Configuration
     LaunchedEffect(Unit) {
-        Configuration.getInstance().userAgentValue = context.packageName
-        Configuration.getInstance().load(
-            context,
-            context.getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
-        )
-
         val hasFine = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
@@ -163,30 +161,35 @@ fun SalePointsScreen(
         if (hasFine || hasCoarse) {
             obtainUserLocation(context) { lat, lng ->
                 viewModel.updateUserLocation(lat, lng)
+                viewModel.loadNearby(lat, lng)
             }
         }
     }
 
     // Ciclo de vida del MapView
-    DisposableEffect(lifecycleOwner, mapViewRef) {
+    // Leer el valor en composición: el cuerpo corre después del factory y vería el mapa nuevo con clave vieja
+    val lifecycleMap = mapViewRef
+    DisposableEffect(lifecycleOwner, lifecycleMap) {
+        val map = lifecycleMap
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> mapViewRef?.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapViewRef?.onPause()
-                Lifecycle.Event.ON_DESTROY -> mapViewRef?.onDetach()
+                Lifecycle.Event.ON_RESUME -> map?.onResume()
+                Lifecycle.Event.ON_PAUSE -> map?.onPause()
+                Lifecycle.Event.ON_DESTROY -> map?.onDetach()
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            mapViewRef?.onDetach()
+            map?.onDetach()
         }
     }
 
     // Actualización reactiva de marcadores en el mapa
     LaunchedEffect(filteredPuntos, userLocation, mapViewRef) {
         val map = mapViewRef ?: return@LaunchedEffect
+        if (map.tileRequestCompleteHandler == null) return@LaunchedEffect // MapView ya destruido (onDetach)
         map.overlays.removeAll { it is Marker }
 
         // Marcadores de puntos de venta coloreados por tipo
@@ -194,7 +197,7 @@ fun SalePointsScreen(
             val marker = Marker(map).apply {
                 position = GeoPoint(punto.lat, punto.lng)
                 title = punto.nombre
-                snippet = "${punto.direccion}${punto.horario?.let { "\nHorario: $it" } ?: ""}"
+                snippet = "${punto.direccion}\n${punto.descripcionTipo}"
                 icon = createSalePointMarkerDrawable(context, punto.tipo)
                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                 setOnMarkerClickListener { _, _ ->
@@ -241,15 +244,33 @@ fun SalePointsScreen(
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
+                        Configuration.getInstance().userAgentValue = ctx.packageName
                         MapView(ctx).apply {
-                            setTileSource(TileSourceFactory.MAPNIK)
+                            setTileSource(createTileSource(tileUrl))
                             setMultiTouchControls(true)
+                            setDestroyMode(false)
                             isTilesScaledToDpi = true
                             controller.setZoom(14.0)
                             controller.setCenter(GeoPoint(LA_RIOJA_LAT, LA_RIOJA_LNG))
                             mapViewRef = this
                         }
+                    },
+                    update = { mapView ->
+                        val target = createTileSource(tileUrl)
+                        if (mapView.tileProvider.tileSource.name() != target.name()) {
+                            mapView.setTileSource(target)
+                        }
                     }
+                )
+
+                // Botón volver (arriba a la izquierda sobre el mapa)
+                FloatingMapButton(
+                    icon = Icons.Rounded.ArrowBack,
+                    contentDescription = "Volver",
+                    onClick = onBack,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(14.dp)
                 )
 
                 // Overlay de gradiente superior para integrar visualmente la barra de estado
@@ -526,7 +547,7 @@ private fun FilterChipItem(
 fun PuntoVentaCard(
     punto: PuntoVenta,
     isSelected: Boolean,
-    distanceMeters: Float?,
+    distanceMeters: Double?,
     onClick: () -> Unit
 ) {
     val (typeColor, typeIcon, typeLabel) = when (punto.tipo) {
@@ -612,21 +633,21 @@ fun PuntoVentaCard(
                         )
                     }
 
-                    // Horario si está disponible
-                    if (!punto.horario.isNullOrBlank()) {
+                    // Descripción del tipo de punto
+                    if (punto.descripcionTipo.isNotBlank()) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.Schedule,
+                                imageVector = Icons.Rounded.Storefront,
                                 contentDescription = null,
                                 tint = TextMuted,
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = punto.horario,
+                                text = punto.descripcionTipo,
                                 color = TextMuted,
                                 fontSize = 11.sp,
                                 maxLines = 1,
@@ -679,10 +700,11 @@ private fun FloatingMapButton(
     icon: ImageVector,
     contentDescription: String,
     tint: Color = TextPrimary,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(42.dp)
             .clip(CircleShape)
             .background(SurfaceDark.copy(alpha = 0.92f))
@@ -832,13 +854,9 @@ private fun calculateDistanceMeters(
     lon1: Double,
     lat2: Double,
     lon2: Double
-): Float {
-    val results = FloatArray(1)
-    Location.distanceBetween(lat1, lon1, lat2, lon2, results)
-    return results[0]
-}
+): Double = GeoUtils.distanceMeters(lat1, lon1, lat2, lon2)
 
-private fun formatDistance(meters: Float): String {
+private fun formatDistance(meters: Double): String {
     return if (meters < 1000) {
         "${meters.toInt()} m"
     } else {

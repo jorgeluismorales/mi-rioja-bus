@@ -22,6 +22,11 @@ class DeleteAlertUseCase @Inject constructor(private val repo: AlertRepository) 
     suspend operator fun invoke(id: Long) = repo.deleteAlert(id)
 }
 
+class FindExistingAlertUseCase @Inject constructor(private val repo: AlertRepository) {
+    suspend operator fun invoke(codLinea: String, codParada: String): AlertEntity? =
+        repo.findExisting(codLinea, codParada)
+}
+
 class ToggleAlertUseCase @Inject constructor(private val repo: AlertRepository) {
     suspend operator fun invoke(id: Long, activa: Boolean) = repo.setAlertActive(id, activa)
 }

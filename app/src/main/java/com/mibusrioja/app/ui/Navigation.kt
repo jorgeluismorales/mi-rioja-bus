@@ -20,6 +20,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.mibusrioja.app.ui.alerts.AlertsScreen
 import com.mibusrioja.app.ui.balance.SaldoScreen
 import com.mibusrioja.app.ui.map.MapScreen
+import com.mibusrioja.app.ui.sales.SalePointsScreen
 import com.mibusrioja.app.ui.planner.TripPlannerScreen
 import com.mibusrioja.app.ui.tariffs.TarifasScreen
 import com.mibusrioja.app.ui.theme.*
@@ -31,6 +32,7 @@ sealed class Screen(val route: String) {
     data object Alerts : Screen("alerts")
     data object Tariffs : Screen("tariffs")
     data object Balance : Screen("balance")
+    data object SalePoints : Screen("sales")
 }
 
 // ── Bottom Navigation Item Model ──────────────────────────────────────────────
@@ -52,8 +54,8 @@ private val bottomNavItems = listOf(
 @Composable
 fun AppBottomNav(
     navController: NavController,
-    alertCount: Int = 0,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    alertCount: Int = 0
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -142,6 +144,13 @@ fun AppNavHost(
         composable(Screen.Planner.route) { TripPlannerScreen() }
         composable(Screen.Alerts.route) { AlertsScreen() }
         composable(Screen.Tariffs.route) { TarifasScreen() }
-        composable(Screen.Balance.route) { SaldoScreen() }
+        composable(Screen.Balance.route) {
+            SaldoScreen(
+                onOpenSalePoints = { navController.navigate(Screen.SalePoints.route) }
+            )
+        }
+        composable(Screen.SalePoints.route) {
+            SalePointsScreen(onBack = { navController.popBackStack() })
+        }
     }
 }
