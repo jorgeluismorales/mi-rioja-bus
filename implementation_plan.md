@@ -70,7 +70,7 @@ App nativa Android (Kotlin + Jetpack Compose) que consume la API de `larioja.mir
 - Al seleccionar línea:
   - Dibuja **polyline del recorrido completo** con los nodos de `/rest/rutaLinea/{cod}`
   - Coloca **markers en cada parada** con popup de nombre de parada
-  - Muestra **buses en tiempo real** (polling 5 s a `/rest/posicionesBuses/{cod}`) con pictograma de bus siempre derecho y flecha exterior según orientación
+  - Muestra **buses en tiempo real** (polling 5 s a `/rest/posicionesBuses/{cod}`) con pictograma de bus siempre derecho y flecha exterior según orientación; buses con rampa en azul + insignia ♿; la última línea elegida se guarda en DataStore y se restaura al abrir
   - Ajusta el viewport al bounds del recorrido
 - Botón "Mi ubicación" (GPS) con marker del usuario
 - Tap en parada → muestra tiempos estimados de llegada (hoy el servidor devuelve lista vacía; ver pendientes)

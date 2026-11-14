@@ -11,6 +11,7 @@ import com.mibusrioja.app.domain.model.TiempoEstimado
 import com.mibusrioja.app.domain.usecase.GetBusPositionsUseCase
 import com.mibusrioja.app.domain.usecase.GetConfigUseCase
 import com.mibusrioja.app.domain.usecase.GetLinesUseCase
+import com.mibusrioja.app.data.local.UserPreferencesRepository
 import com.mibusrioja.app.data.map.TileSourceProvider
 import com.mibusrioja.app.domain.usecase.GetArrivalTimesUseCase
 import com.mibusrioja.app.domain.usecase.GetRouteUseCase
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -35,7 +37,8 @@ class BusMapViewModel @Inject constructor(
     private val getRouteUseCase: GetRouteUseCase,
     private val getBusPositionsUseCase: GetBusPositionsUseCase,
     private val getArrivalTimesUseCase: GetArrivalTimesUseCase,
-    private val tileSourceProvider: TileSourceProvider
+    private val tileSourceProvider: TileSourceProvider,
+    private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
     private val _lineGroups = MutableStateFlow<List<LineGroup>>(emptyList())
@@ -116,6 +119,7 @@ class BusMapViewModel @Inject constructor(
             getLinesUseCase().fold(
                 onSuccess = { groups ->
                     _lineGroups.value = groups
+                    restoreLastLine(groups)
                 },
                 onFailure = { e ->
                     _error.value = "Error al cargar las líneas: ${e.localizedMessage ?: "Error de red"}"
@@ -125,6 +129,20 @@ class BusMapViewModel @Inject constructor(
             _isLoading.value = false
         }
     }
+
+    /**
+     * Al abrir la app vuelve a seleccionar la última línea filtrada por el usuario.
+     */
+    private suspend fun restoreLastLine(groups: List<LineGroup>) {
+        if (_selectedLine.value != null) return
+        val code = userPreferencesRepository.lastLineCode.first() ?: return
+        groups.asSequence().flatMap { flattenLines(it).asSequence() }
+            .firstOrNull { it.codLinea == code }
+            ?.let { selectLine(it) }
+    }
+
+    private fun flattenLines(group: LineGroup): List<BusLine> =
+        group.lineas + group.subGrupos.flatMap { flattenLines(it) }
 
     /**
      * Selecciona una línea de colectivos, descarga los nodos del recorrido
@@ -139,6 +157,7 @@ class BusMapViewModel @Inject constructor(
         cancelPolling()
 
         _selectedLine.value = line
+        viewModelScope.launch { userPreferencesRepository.saveLastLineCode(line.codLinea) }
         _selectedStop.value = null
         _stopArrivalTimes.value = emptyList()
         _busPositions.value = emptyList()

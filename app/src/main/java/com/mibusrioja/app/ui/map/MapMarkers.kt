@@ -50,8 +50,9 @@ internal fun createStopMarkerDrawable(context: Context): Drawable {
  * Ícono de colectivo en tiempo real: círculo naranja con el pictograma de bus siempre derecho
  * y una flecha exterior rotada según [orientacionGrados] (0° = norte, sentido horario).
  * El marcador no se rota: la orientación queda "horneada" en el bitmap para que el bus sea legible.
+ * Los colectivos con rampa se pintan en azul y llevan una insignia de accesibilidad.
  */
-internal fun createBusMarkerDrawable(context: Context, orientacionGrados: Float): Drawable {
+internal fun createBusMarkerDrawable(context: Context, orientacionGrados: Float, tieneRampa: Boolean = false): Drawable {
     val density = context.resources.displayMetrics.density
     val sizePx = (64 * density).toInt()
     val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
@@ -90,7 +91,7 @@ internal fun createBusMarkerDrawable(context: Context, orientacionGrados: Float)
     canvas.drawCircle(cx, cy + 1.5f * density, radius + 2f * density, paint)
     paint.color = android.graphics.Color.WHITE
     canvas.drawCircle(cx, cy, radius + 2f * density, paint)
-    paint.color = Color(0xFFFF6B35).toArgb()
+    paint.color = (if (tieneRampa) Color(0xFF3B82F6) else Color(0xFFFF6B35)).toArgb()
     canvas.drawCircle(cx, cy, radius, paint)
 
     // Pictograma de colectivo (Material "directions_bus"), siempre derecho
@@ -100,6 +101,24 @@ internal fun createBusMarkerDrawable(context: Context, orientacionGrados: Float)
         icon.setBounds((cx - half).toInt(), (cy - half).toInt(), (cx + half).toInt(), (cy + half).toInt())
         icon.setTint(android.graphics.Color.WHITE)
         icon.draw(canvas)
+    }
+
+    // Insignia de accesibilidad (abajo a la derecha) para colectivos con rampa
+    if (tieneRampa) {
+        val bx = cx + radius * 0.75f
+        val by = cy + radius * 0.75f
+        val badgeR = 7f * density
+        paint.color = android.graphics.Color.WHITE
+        canvas.drawCircle(bx, by, badgeR + 1.5f * density, paint)
+        paint.color = Color(0xFF10B981).toArgb()
+        canvas.drawCircle(bx, by, badgeR, paint)
+        val badge = ContextCompat.getDrawable(context, R.drawable.ic_accessible_badge)?.mutate()
+        if (badge != null) {
+            val bh = (5f * density).toInt()
+            badge.setBounds((bx - bh).toInt(), (by - bh).toInt(), (bx + bh).toInt(), (by + bh).toInt())
+            badge.setTint(android.graphics.Color.WHITE)
+            badge.draw(canvas)
+        }
     }
 
     return BitmapDrawable(context.resources, bitmap)

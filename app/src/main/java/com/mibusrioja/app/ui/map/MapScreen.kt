@@ -170,10 +170,10 @@ fun MapScreen(
     // Custom Marker Drawables
     val stopIconDrawable = remember(context) { createStopMarkerDrawable(context) }
     // Cache de íconos por orientación redondeada a 5° (máx. 72 bitmaps)
-    val busIconCache = remember(context) { mutableMapOf<Int, Drawable>() }
-    fun busIconFor(orientacion: Float): Drawable {
-        val key = (((orientacion % 360f) + 360f) % 360f / 5f).toInt() * 5
-        return busIconCache.getOrPut(key) { createBusMarkerDrawable(context, key.toFloat()) }
+    val busIconCache = remember(context) { mutableMapOf<Pair<Int, Boolean>, Drawable>() }
+    fun busIconFor(orientacion: Float, tieneRampa: Boolean): Drawable {
+        val deg = (((orientacion % 360f) + 360f) % 360f / 5f).toInt() * 5
+        return busIconCache.getOrPut(deg to tieneRampa) { createBusMarkerDrawable(context, deg.toFloat(), tieneRampa) }
     }
 
     // GPS Location Client
@@ -380,7 +380,7 @@ fun MapScreen(
                         append("%.1f".format(zoomLevel))
                         items.forEach { item ->
                             when (item) {
-                                is BusMapItem.Single -> append("|s:${item.bus.interno}:%.5f:%.5f:%.0f".format(item.bus.lat, item.bus.lng, item.bus.orientacion))
+                                is BusMapItem.Single -> append("|s:${item.bus.interno}:%.5f:%.5f:%.0f:${item.bus.tieneRampa}".format(item.bus.lat, item.bus.lng, item.bus.orientacion))
                                 is BusMapItem.Cluster -> append("|c:%.5f:%.5f:".format(item.lat, item.lng)).append(item.buses.joinToString(",") { it.interno })
                             }
                         }
@@ -399,7 +399,7 @@ fun MapScreen(
                                         id = bus.interno
                                         position = GeoPoint(bus.lat, bus.lng)
                                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                        icon = busIconFor(bus.orientacion)
+                                        icon = busIconFor(bus.orientacion, bus.tieneRampa)
                                         setOnMarkerClickListener { _, _ ->
                                             viewModel.selectBus(bus.interno)
                                             true
@@ -1029,7 +1029,8 @@ private fun FiltersSheet(
         FilterSwitchRow(
             label = "Solo colectivos con rampa",
             checked = onlyRampa,
-            onCheckedChange = onOnlyRampaChange
+            onCheckedChange = onOnlyRampaChange,
+            supporting = "En el mapa se ven en azul con insignia de accesibilidad"
         )
     }
 }
@@ -1038,18 +1039,28 @@ private fun FiltersSheet(
 private fun FilterSwitchRow(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    supporting: String? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(
-            text = label,
-            color = TextPrimary,
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                color = TextPrimary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (supporting != null) {
+                Text(
+                    text = supporting,
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,

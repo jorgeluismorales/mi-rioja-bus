@@ -17,6 +17,14 @@ class UserPreferencesRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val cardNumberKey = stringPreferencesKey("saved_card_number")
+    private val lastLineKey = stringPreferencesKey("last_line_code")
+
+    val lastLineCode: Flow<String?> = context.userPrefsDataStore.data
+        .map { prefs -> prefs[lastLineKey] }
+
+    suspend fun saveLastLineCode(codLinea: String) {
+        context.userPrefsDataStore.edit { prefs -> prefs[lastLineKey] = codLinea }
+    }
 
     val savedCardNumber: Flow<String?> = context.userPrefsDataStore.data
         .map { prefs -> prefs[cardNumberKey] }
