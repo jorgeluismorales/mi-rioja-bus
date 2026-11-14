@@ -41,6 +41,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -149,8 +151,9 @@ fun PrimaryButton(
         enabled = enabled && !loading,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .heightIn(min = 52.dp),
         shape = RoundedCornerShape(Dimens.radiusMd),
+        contentPadding = PaddingValues(horizontal = Dimens.lg, vertical = Dimens.md),
         colors = ButtonDefaults.buttonColors(
             containerColor = RiojaOrange,
             contentColor = Color.White,
@@ -176,7 +179,9 @@ fun PrimaryButton(
         Text(
             text = text,
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 2
         )
     }
 }
@@ -194,7 +199,7 @@ fun SecondaryButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .heightIn(min = 52.dp),
         shape = RoundedCornerShape(Dimens.radiusMd),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = RiojaOrange),
         border = BorderStroke(1.dp, RiojaOrange.copy(alpha = 0.6f))
@@ -315,7 +320,7 @@ fun EmptyState(
             PrimaryButton(
                 text = actionLabel,
                 onClick = onAction,
-                modifier = Modifier.widthIn(max = 320.dp)
+                modifier = Modifier.widthIn(max = 360.dp)
             )
         }
     }
