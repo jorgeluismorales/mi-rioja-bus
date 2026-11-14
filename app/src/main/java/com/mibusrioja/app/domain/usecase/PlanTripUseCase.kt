@@ -6,6 +6,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlin.math.abs
+import kotlin.math.cos
 import javax.inject.Inject
 import kotlin.math.roundToInt
 
@@ -17,6 +20,12 @@ class PlanTripUseCase @Inject constructor(
     private val getLinesUseCase: GetLinesUseCase,
     private val getRouteUseCase: GetRouteUseCase
 ) {
+    private companion object {
+        const val MAX_WALK_M = 800.0
+        const val MAX_TRANSFER_M = 300.0
+        const val PLAN_TIMEOUT_MS = 30_000L
+    }
+
     private data class StopRef(val nodeIndex: Int, val node: RouteNode)
 
     private data class LineRoute(val line: BusLine, val nodes: List<RouteNode>, val stops: List<StopRef>)
@@ -40,13 +49,13 @@ class PlanTripUseCase @Inject constructor(
             }.mapNotNull { it.await() }
         }
 
-        withContext(Dispatchers.Default) {
+        withContext(Dispatchers.Default) { withTimeout(PLAN_TIMEOUT_MS) {
             val direct = findBestDirect(routes, originLat, originLng, destLat, destLng)
             val plan = direct ?: findBestTransfer(routes, originLat, originLng, destLat, destLng)
             plan ?: throw NoRouteException(
                 "No encontramos un recorrido de colectivo entre tu ubicación y ese destino (buscamos paradas hasta 800 m)."
             )
-        }
+        } }
     }
 
     private fun flattenLines(group: LineGroup): List<BusLine> =
@@ -92,11 +101,11 @@ class PlanTripUseCase @Inject constructor(
         var bestScore = Double.MAX_VALUE
 
         for (route in routes) {
-            val board = route.stops.filter { dist(it.node, originLat, originLng) <= 800.0 }
+            val board = route.stops.filter { dist(it.node, originLat, originLng) <= MAX_WALK_M }
             if (board.isEmpty()) continue
             for (a in board) {
                 val walkOrigen = dist(a.node, originLat, originLng)
-                val alightCandidates = route.stops.filter { it.nodeIndex > a.nodeIndex && dist(it.node, destLat, destLng) <= 800.0 }
+                val alightCandidates = route.stops.filter { it.nodeIndex > a.nodeIndex && dist(it.node, destLat, destLng) <= MAX_WALK_M }
                 for (b in alightCandidates) {
                     val walkDestino = dist(b.node, destLat, destLng)
                     val score = walkOrigen + walkDestino
@@ -153,6 +162,26 @@ class PlanTripUseCase @Inject constructor(
         )
     }
 
+    private data class TransferPair(val x: StopRef, val y: StopRef, val dist: Double)
+
+    /**
+     * Pares de paradas (x en A, y en B) a menos de [MAX_TRANSFER_M] entre sí.
+     * Prefiltro por delta de lat/lng para evitar millones de haversines.
+     */
+    private fun transferPairs(a: LineRoute, b: LineRoute): List<TransferPair> {
+        val maxDLat = MAX_TRANSFER_M / 111_000.0
+        val maxDLng = maxDLat / cos(Math.toRadians(a.stops.first().node.lat))
+        val result = mutableListOf<TransferPair>()
+        for (x in a.stops) {
+            for (y in b.stops) {
+                if (abs(x.node.lat - y.node.lat) > maxDLat || abs(x.node.lng - y.node.lng) > maxDLng) continue
+                val d = GeoUtils.distanceMeters(x.node.lat, x.node.lng, y.node.lat, y.node.lng)
+                if (d <= MAX_TRANSFER_M) result += TransferPair(x, y, d)
+            }
+        }
+        return result
+    }
+
     private fun findBestTransfer(
         routes: List<LineRoute>,
         originLat: Double, originLng: Double,
@@ -161,36 +190,37 @@ class PlanTripUseCase @Inject constructor(
         var best: TripPlan? = null
         var bestScore = Double.MAX_VALUE
 
+        // Distancias origen/destino calculadas una sola vez por parada
+        val boardByRoute = routes.associateWith { r ->
+            r.stops.mapNotNull { st -> dist(st.node, originLat, originLng).takeIf { it <= MAX_WALK_M }?.let { st to it } }
+        }
+        val alightByRoute = routes.associateWith { r ->
+            r.stops.mapNotNull { st -> dist(st.node, destLat, destLng).takeIf { it <= MAX_WALK_M }?.let { st to it } }
+        }
+
         for (a in routes) {
+            val boardOptions = boardByRoute.getValue(a)
+            if (boardOptions.isEmpty()) continue
             for (b in routes) {
                 if (a === b) continue
-
-                val boardOptions = a.stops.filter { dist(it.node, originLat, originLng) <= 800.0 }
-                if (boardOptions.isEmpty()) continue
-                val alightOptions = b.stops.filter { dist(it.node, destLat, destLng) <= 800.0 }
+                val alightOptions = alightByRoute.getValue(b)
                 if (alightOptions.isEmpty()) continue
 
-                for (sa in boardOptions) {
-                    val walkOrigen = dist(sa.node, originLat, originLng)
-                    // x: parada de A posterior al abordaje donde se baja para transbordar
-                    val xOptions = a.stops.filter { it.nodeIndex > sa.nodeIndex }
-                    for (sb in alightOptions) {
-                        val walkDestino = dist(sb.node, destLat, destLng)
-                        // y: parada de B anterior a la bajada donde se sube el segundo colectivo
-                        val yOptions = b.stops.filter { it.nodeIndex < sb.nodeIndex }
-                        for (x in xOptions) {
-                            for (y in yOptions) {
-                                val dxy = GeoUtils.distanceMeters(x.node.lat, x.node.lng, y.node.lat, y.node.lng)
-                                if (dxy > 300.0) continue
-                                val score = walkOrigen + 1.5 * dxy + walkDestino
-                                if (score < bestScore) {
-                                    bestScore = score
-                                    best = buildTransferPlan(
-                                        a, b, sa.node, x.node, y.node, sb.node, dxy,
-                                        walkOrigen, walkDestino,
-                                        originLat, originLng, destLat, destLng
-                                    )
-                                }
+                val pairs = transferPairs(a, b)
+                if (pairs.isEmpty()) continue
+
+                for ((sa, walkOrigen) in boardOptions) {
+                    for ((sb, walkDestino) in alightOptions) {
+                        for (t in pairs) {
+                            if (t.x.nodeIndex <= sa.nodeIndex || t.y.nodeIndex >= sb.nodeIndex) continue
+                            val score = walkOrigen + 1.5 * t.dist + walkDestino
+                            if (score < bestScore) {
+                                bestScore = score
+                                best = buildTransferPlan(
+                                    a, b, sa.node, t.x.node, t.y.node, sb.node, t.dist,
+                                    walkOrigen, walkDestino,
+                                    originLat, originLng, destLat, destLng
+                                )
                             }
                         }
                     }

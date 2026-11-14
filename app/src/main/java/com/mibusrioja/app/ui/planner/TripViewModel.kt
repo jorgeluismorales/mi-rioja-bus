@@ -255,10 +255,13 @@ class TripViewModel @Inject constructor(
                         lat = dest.first,
                         lng = dest.second
                     )
-                    _alertsAutoCreated.value = createAutoAlerts(plan)
                 },
                 onFailure = { throwable ->
-                    _error.value = throwable.message ?: "No se pudo calcular la ruta para tu viaje"
+                    _error.value = if (throwable is kotlinx.coroutines.TimeoutCancellationException) {
+                        "La búsqueda tardó demasiado. Probá con un destino más cercano o reintentá."
+                    } else {
+                        throwable.message ?: "No se pudo calcular la ruta para tu viaje"
+                    }
                 }
             )
 
@@ -266,8 +269,25 @@ class TripViewModel @Inject constructor(
         }
     }
 
+    private val _isActivatingAlerts = MutableStateFlow(false)
+    val isActivatingAlerts: StateFlow<Boolean> = _isActivatingAlerts.asStateFlow()
+
     /**
-     * Crea alertas automáticas de 100 m en cada transbordo y en la parada
+     * Activa, a pedido del usuario, las alertas de proximidad del viaje planificado
+     * (transbordos + parada final). Antes se creaban solas al planificar, lo que sorprendía al usuario.
+     */
+    fun activateTripAlerts() {
+        val plan = _tripPlan.value ?: return
+        if (_isActivatingAlerts.value) return
+        viewModelScope.launch {
+            _isActivatingAlerts.value = true
+            _alertsAutoCreated.value = createAutoAlerts(plan)
+            _isActivatingAlerts.value = false
+        }
+    }
+
+    /**
+     * Crea alertas de 100 m en cada transbordo y en la parada
      * de bajada final, evitando duplicar alertas existentes.
      */
     private suspend fun createAutoAlerts(plan: TripPlan): Int {

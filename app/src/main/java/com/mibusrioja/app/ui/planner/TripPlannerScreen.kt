@@ -54,6 +54,8 @@ import com.mibusrioja.app.domain.model.TripStepType
 import com.mibusrioja.app.ui.map.createPointMarkerDrawable
 import com.mibusrioja.app.ui.map.createStopMarkerDrawable
 import com.mibusrioja.app.ui.map.createTileSource
+import androidx.compose.material.icons.outlined.NotificationsActive
+import com.mibusrioja.app.ui.theme.SuccessGreen
 import com.mibusrioja.app.ui.components.AppBottomSheet
 import com.mibusrioja.app.ui.components.AppCard
 import com.mibusrioja.app.ui.components.AppTextField
@@ -85,6 +87,7 @@ fun TripPlannerScreen(
     val destDescription by viewModel.destDescription.collectAsStateWithLifecycle()
     val destLocation by viewModel.destLocation.collectAsStateWithLifecycle()
     val alertsAutoCreated by viewModel.alertsAutoCreated.collectAsStateWithLifecycle()
+    val isActivatingAlerts by viewModel.isActivatingAlerts.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val tileUrl by viewModel.tileUrl.collectAsStateWithLifecycle()
     val frequentDestinations by viewModel.frequentDestinations.collectAsStateWithLifecycle()
@@ -149,7 +152,7 @@ fun TripPlannerScreen(
     LaunchedEffect(alertsAutoCreated) {
         if (alertsAutoCreated > 0) {
             snackbarHostState.showSnackbar(
-                message = "⚡ Se configuraron $alertsAutoCreated alertas de transbordo automáticamente"
+                message = "Se activaron $alertsAutoCreated ${if (alertsAutoCreated == 1) "alerta" else "alertas"} de proximidad para este viaje"
             )
         }
     }
@@ -377,6 +380,22 @@ fun TripPlannerScreen(
                                 .height(240.dp)
                                 .clip(RoundedCornerShape(16.dp))
                         )
+                    }
+
+                    item {
+                        if (alertsAutoCreated > 0) {
+                            StatusPill(
+                                text = "Alertas de proximidad activadas para este viaje",
+                                color = SuccessGreen
+                            )
+                        } else {
+                            SecondaryButton(
+                                text = "Activar alertas de este viaje",
+                                onClick = { viewModel.activateTripAlerts() },
+                                enabled = !isActivatingAlerts,
+                                icon = Icons.Outlined.NotificationsActive
+                            )
+                        }
                     }
 
                     itemsIndexed(tripPlan!!.pasos) { index, step ->
