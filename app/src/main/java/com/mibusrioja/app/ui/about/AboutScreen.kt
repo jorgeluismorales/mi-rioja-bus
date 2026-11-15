@@ -17,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.rounded.DirectionsBus
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,7 +35,6 @@ import com.mibusrioja.app.ui.components.AppCard
 import com.mibusrioja.app.ui.components.Dimens
 import com.mibusrioja.app.ui.components.ScreenHeader
 import com.mibusrioja.app.ui.theme.Background
-import com.mibusrioja.app.ui.theme.InfoBlue
 import com.mibusrioja.app.ui.theme.RiojaOrange
 import com.mibusrioja.app.ui.theme.TextMuted
 import com.mibusrioja.app.ui.theme.TextPrimary
@@ -44,8 +42,8 @@ import com.mibusrioja.app.ui.theme.TextSecondary
 import com.mibusrioja.app.ui.theme.WarningYellow
 
 /**
- * Pantalla "Acerca de": aclara que la app es un proyecto personal independiente,
- * sin relación con Red Bus ni con Rioja Bus.
+ * Pantalla "Acerca de": aclara que la app es un proyecto independiente,
+ * sin relación con Red Bus ni con Rioja Bus, y explica su origen.
  */
 @Composable
 fun AboutScreen(
@@ -78,11 +76,12 @@ fun AboutScreen(
                 AboutCard(
                     icon = Icons.Outlined.Info,
                     iconTint = WarningYellow,
-                    title = "App no oficial",
-                    body = "Mi Bus Rioja NO tiene ninguna relación con Red Bus ni con Rioja Bus, " +
-                        "ni con la Municipalidad o el Gobierno de La Rioja. No es una app oficial " +
-                        "ni está avalada por ninguna de esas entidades. Las marcas mencionadas " +
-                        "pertenecen a sus respectivos dueños."
+                    title = "Aplicación independiente",
+                    body = "Mi Bus Rioja es un proyecto independiente y sin fines de lucro. " +
+                        "No mantiene relación, vínculo ni afiliación alguna con Red Bus, Rioja Bus " +
+                        "ni con los organismos públicos de la provincia de La Rioja, y no constituye " +
+                        "una aplicación oficial ni avalada por dichas entidades. Las marcas y nombres " +
+                        "mencionados pertenecen a sus respectivos titulares."
                 )
             }
 
@@ -90,26 +89,13 @@ fun AboutScreen(
                 AboutCard(
                     icon = Icons.Outlined.Lightbulb,
                     iconTint = RiojaOrange,
-                    title = "¿Por qué existe?",
-                    body = "La idea nace de una inquietud personal: la app original no tenía las " +
-                        "opciones que yo necesitaba como usuario del colectivo, por ejemplo " +
-                        "planificar un viaje de un punto a otro o programar alertas de proximidad " +
-                        "para que me avise cuando el colectivo o mi parada están cerca. " +
-                        "Así que decidí hacer mi propia versión con esas funciones."
-                )
-            }
-
-            item {
-                AboutCard(
-                    icon = Icons.Outlined.Public,
-                    iconTint = InfoBlue,
-                    title = "De dónde salen los datos",
-                    body = "Los recorridos, posiciones de colectivos, tarifas, saldo y puntos de " +
-                        "venta se consultan en tiempo real desde el servicio público de " +
-                        "larioja.miredbus.com.ar. Los mapas son de OpenStreetMap y la búsqueda " +
-                        "de lugares usa Nominatim. La app no cobra nada, no tiene publicidad y " +
-                        "no envía tus datos a ningún servidor propio: la ubicación, las alertas " +
-                        "y el número de tarjeta guardado quedan sólo en tu teléfono."
+                    title = "Origen del proyecto",
+                    body = "Esta aplicación surge de una inquietud personal como usuario del " +
+                        "transporte público. La aplicación oficial no ofrecía funciones que " +
+                        "consideraba esenciales para el uso diario, como la planificación de viajes " +
+                        "entre dos puntos de la ciudad o la programación de alertas de proximidad. " +
+                        "Mi Bus Rioja nace con el objetivo de cubrir esas necesidades y ofrecer una " +
+                        "experiencia más completa a quienes se mueven en colectivo por La Rioja."
                 )
             }
 
