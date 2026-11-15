@@ -1182,9 +1182,15 @@ fun TripPlanMapView(
             }
 
             if (allPoints.size >= 2) {
-                try {
-                    mapView.zoomToBoundingBox(BoundingBox.fromGeoPoints(allPoints), false, 100)
-                } catch (_: Exception) {
+                val box = BoundingBox.fromGeoPoints(allPoints)
+                // Con el MapView aún sin medir (0x0) osmdroid entra en un bucle infinito en
+                // zoomToBoundingBox -> getCloserPixel y bloquea el hilo principal (ANR).
+                if (mapView.width > 0 && mapView.height > 0) {
+                    runCatching { mapView.zoomToBoundingBox(box, false, 100) }
+                } else {
+                    mapView.addOnFirstLayoutListener { v, _, _, _, _ ->
+                        runCatching { (v as MapView).zoomToBoundingBox(box, false, 100) }
+                    }
                 }
             }
             mapView.invalidate()

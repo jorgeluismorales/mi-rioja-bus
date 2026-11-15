@@ -362,11 +362,15 @@ fun MapScreen(
 
                             // Ajustar zoom y encuadre del recorrido
                             if (geoPoints.size >= 2) {
-                                try {
-                                    val boundingBox = BoundingBox.fromGeoPoints(geoPoints)
-                                    mapView.zoomToBoundingBox(boundingBox, true, 120)
-                                } catch (_: Exception) {
-                                    mapView.controller.animateTo(geoPoints.first(), 14.0, 600L)
+                                val boundingBox = BoundingBox.fromGeoPoints(geoPoints)
+                                // Nunca llamar zoomToBoundingBox con el mapa sin medir (0x0): osmdroid se cuelga
+                                if (mapView.width > 0 && mapView.height > 0) {
+                                    runCatching { mapView.zoomToBoundingBox(boundingBox, true, 120) }
+                                        .onFailure { mapView.controller.animateTo(geoPoints.first(), 14.0, 600L) }
+                                } else {
+                                    mapView.addOnFirstLayoutListener { v, _, _, _, _ ->
+                                        runCatching { (v as MapView).zoomToBoundingBox(boundingBox, false, 120) }
+                                    }
                                 }
                             }
                         }
