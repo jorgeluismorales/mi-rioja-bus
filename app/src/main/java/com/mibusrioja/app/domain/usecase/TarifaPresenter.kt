@@ -53,9 +53,9 @@ fun buildTarifaDisplays(items: List<TarifaItem>): List<TarifaDisplay> {
                 raw.contains("gratis", ignoreCase = true) ||
                 raw.contains("libre", ignoreCase = true) -> TarifaDisplay(
                 categoria = categoria,
-                precioFinal = "$0,00",
+                precioFinal = "Pase Libre",
                 kind = TarifaKind.GRATIS,
-                etiqueta = "Pase Libre"
+                etiqueta = null
             )
             else -> {
                 val parsed = parseArgPrice(raw)

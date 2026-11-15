@@ -180,7 +180,8 @@ private fun TarifaCard(display: TarifaDisplay) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     text = display.precioFinal,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = if (display.kind == TarifaKind.GRATIS) MaterialTheme.typography.titleMedium
+                    else MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = RiojaOrange
                 )

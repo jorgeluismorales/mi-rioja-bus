@@ -47,8 +47,8 @@ class TarifaPresenterTest {
     fun `pase libre maps to gratis`() {
         val disc = buildTarifaDisplays(items).first { it.categoria == "Discapacidad" }
         assertEquals(TarifaKind.GRATIS, disc.kind)
-        assertEquals("$0,00", disc.precioFinal)
-        assertEquals("Pase Libre", disc.etiqueta)
+        assertEquals("Pase Libre", disc.precioFinal)
+        assertNull(disc.etiqueta)
     }
 
     @Test
