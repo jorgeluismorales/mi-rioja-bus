@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -436,8 +435,7 @@ fun MapScreen(
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(start = 16.dp, top = 16.dp, end = 80.dp),
+                    .padding(start = 16.dp, top = 8.dp, end = 80.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Surface(
