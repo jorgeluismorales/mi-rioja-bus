@@ -29,9 +29,9 @@ class AlertForegroundService : Service() {
         const val TAG = "AlertForegroundService"
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
-        private const val LOCATION_INTERVAL_MS = 10_000L
-        private const val LOCATION_FASTEST_MS = 5_000L
-        private const val BUS_POLL_INTERVAL_MS = 15_000L
+        private const val LOCATION_INTERVAL_MS = 5_000L
+        private const val LOCATION_FASTEST_MS = 2_000L
+        private const val BUS_POLL_INTERVAL_MS = 2_000L
     }
 
     @Inject lateinit var alertRepository: AlertRepository

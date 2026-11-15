@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.mibusrioja.app.data.map.TileSourceProvider
 import com.mibusrioja.app.domain.geo.GeoUtils
 import com.mibusrioja.app.domain.model.PuntoVenta
-import com.mibusrioja.app.domain.model.TipoPuntoVenta
 import com.mibusrioja.app.domain.usecase.GetConfigUseCase
 import com.mibusrioja.app.domain.usecase.GetPuntosVentaUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,8 +27,6 @@ class SalePointsViewModel @Inject constructor(
     private val _puntos = MutableStateFlow<List<PuntoVenta>>(emptyList())
     val puntos: StateFlow<List<PuntoVenta>> = _puntos.asStateFlow()
 
-    private val _selectedTipo = MutableStateFlow<TipoPuntoVenta?>(null)
-    val selectedTipo: StateFlow<TipoPuntoVenta?> = _selectedTipo.asStateFlow()
 
     private val _userLocation = MutableStateFlow<Pair<Double, Double>?>(null)
     val userLocation: StateFlow<Pair<Double, Double>?> = _userLocation.asStateFlow()
@@ -43,24 +40,14 @@ class SalePointsViewModel @Inject constructor(
     private val _tileUrl = MutableStateFlow<String?>(null)
     val tileUrl: StateFlow<String?> = _tileUrl.asStateFlow()
 
-    // Filtra por tipo (si fue seleccionado) y ordena por proximidad si la ubicación del usuario está disponible
-    val filteredPuntos: StateFlow<List<PuntoVenta>> = combine(
-        _puntos,
-        _selectedTipo,
-        _userLocation
-    ) { puntosList, tipoFiltro, userLoc ->
-        val filtered = if (tipoFiltro == null) {
-            puntosList
-        } else {
-            puntosList.filter { it.tipo == tipoFiltro }
-        }
-
+    // Ordena por proximidad si la ubicación del usuario está disponible
+    val filteredPuntos: StateFlow<List<PuntoVenta>> = combine(_puntos, _userLocation) { puntosList, userLoc ->
         if (userLoc != null) {
-            filtered.sortedBy { punto ->
+            puntosList.sortedBy { punto ->
                 GeoUtils.distanceMeters(userLoc.first, userLoc.second, punto.lat, punto.lng)
             }
         } else {
-            filtered
+            puntosList
         }
     }.stateIn(
         scope = viewModelScope,
@@ -108,13 +95,6 @@ class SalePointsViewModel @Inject constructor(
                     _isLoading.value = false
                 }
         }
-    }
-
-    /**
-     * Establece o alterna el filtro por tipo de punto de venta (ATM, COMUN, ABONO).
-     */
-    fun selectTipo(tipo: TipoPuntoVenta?) {
-        _selectedTipo.value = if (_selectedTipo.value == tipo) null else tipo
     }
 
     /**

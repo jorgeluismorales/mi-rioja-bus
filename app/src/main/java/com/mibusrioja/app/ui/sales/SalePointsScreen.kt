@@ -123,7 +123,6 @@ fun SalePointsScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val filteredPuntos by viewModel.filteredPuntos.collectAsStateWithLifecycle()
-    val selectedTipo by viewModel.selectedTipo.collectAsStateWithLifecycle()
     val userLocation by viewModel.userLocation.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
@@ -375,19 +374,11 @@ fun SalePointsScreen(
                     .weight(0.60f)
                     .background(Background)
             ) {
-                // Barra superior de chips de filtro (ALL, ATM, COMÚN, ABONO)
-                SalePointsFilterSection(
-                    selectedTipo = selectedTipo,
-                    onSelectTipo = { viewModel.selectTipo(it) },
-                    totalCount = filteredPuntos.size
-                )
+                SalePointsHeader(totalCount = filteredPuntos.size)
 
                 // Lista scrolleable de tarjetas
                 if (filteredPuntos.isEmpty() && !isLoading) {
-                    SalePointsEmptyState(
-                        hasFilter = selectedTipo != null,
-                        onClearFilter = { viewModel.selectTipo(null) }
-                    )
+                    SalePointsEmptyState()
                 } else {
                     LazyColumn(
                         state = listState,
@@ -421,121 +412,28 @@ fun SalePointsScreen(
 }
 
 /**
- * Barra superior con chips para filtrar puntos por tipo (ALL, ATM, Común, Abono).
+ * Encabezado de la lista con el total de puntos disponibles.
  */
 @Composable
-fun SalePointsFilterSection(
-    selectedTipo: TipoPuntoVenta?,
-    onSelectTipo: (TipoPuntoVenta?) -> Unit,
-    totalCount: Int
-) {
-    Column(
+fun SalePointsHeader(totalCount: Int) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(SurfaceDark)
-            .padding(vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Puntos de recarga y venta",
-                color = TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "$totalCount disponibles",
-                color = TextMuted,
-                fontSize = 12.sp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Fila horizontal deslizable de filtros
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChipItem(
-                label = "Todos",
-                icon = Icons.Rounded.AllInclusive,
-                isSelected = selectedTipo == null,
-                accentColor = RiojaOrange,
-                onClick = { onSelectTipo(null) }
-            )
-
-            FilterChipItem(
-                label = "ATM",
-                icon = Icons.Rounded.Atm,
-                isSelected = selectedTipo == TipoPuntoVenta.ATM,
-                accentColor = WarningYellow,
-                onClick = { onSelectTipo(TipoPuntoVenta.ATM) }
-            )
-
-            FilterChipItem(
-                label = "Común",
-                icon = Icons.Rounded.Storefront,
-                isSelected = selectedTipo == TipoPuntoVenta.COMUN,
-                accentColor = SuccessGreen,
-                onClick = { onSelectTipo(TipoPuntoVenta.COMUN) }
-            )
-
-            FilterChipItem(
-                label = "Abono",
-                icon = Icons.Rounded.Badge,
-                isSelected = selectedTipo == TipoPuntoVenta.ABONO,
-                accentColor = InfoBlue,
-                onClick = { onSelectTipo(TipoPuntoVenta.ABONO) }
-            )
-        }
-    }
-}
-
-/**
- * Chip individual con estilo oscuro y acento de color correspondiente.
- */
-@Composable
-private fun FilterChipItem(
-    label: String,
-    icon: ImageVector,
-    isSelected: Boolean,
-    accentColor: Color,
-    onClick: () -> Unit
-) {
-    val containerBg = if (isSelected) accentColor.copy(alpha = 0.22f) else SurfaceCard
-    val borderCol = if (isSelected) accentColor else GlassBorder
-    val textCol = if (isSelected) accentColor else TextSecondary
-
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(containerBg)
-            .border(1.dp, borderCol, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = textCol,
-            modifier = Modifier.size(16.dp)
+        Text(
+            text = "Puntos de recarga y venta",
+            color = TextPrimary,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
         )
         Text(
-            text = label,
-            color = textCol,
-            fontSize = 12.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            text = "$totalCount disponibles",
+            color = TextMuted,
+            fontSize = 12.sp
         )
     }
 }
@@ -725,10 +623,7 @@ private fun FloatingMapButton(
  * Estado vacío cuando no hay puntos coincidentes con el filtro.
  */
 @Composable
-private fun SalePointsEmptyState(
-    hasFilter: Boolean,
-    onClearFilter: () -> Unit
-) {
+private fun SalePointsEmptyState() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -750,20 +645,11 @@ private fun SalePointsEmptyState(
             fontWeight = FontWeight.SemiBold
         )
         Text(
-            text = "Probá cambiando el filtro seleccionado para ver otros comercios.",
+            text = "No hay puntos de venta disponibles cerca de tu ubicación.",
             color = TextSecondary,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
         )
-        if (hasFilter) {
-            Button(
-                onClick = onClearFilter,
-                colors = ButtonDefaults.buttonColors(containerColor = RiojaOrange),
-                shape = RoundedCornerShape(10.dp)
-            ) {
-                Text(text = "Ver todos", fontSize = 12.sp)
-            }
-        }
     }
 }
 
