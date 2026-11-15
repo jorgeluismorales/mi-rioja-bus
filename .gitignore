@@ -10,3 +10,8 @@
 
 # Capturas de red locales
 *.csv
+
+# Firma de release
+*.jks
+*.keystore
+keystore.properties
