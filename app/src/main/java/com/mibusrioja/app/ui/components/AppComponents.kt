@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
@@ -29,6 +30,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -71,6 +73,18 @@ object Dimens {
     val radiusMd = 16.dp
     val radiusLg = 24.dp
     val screenPadding = 20.dp
+}
+
+/** Botón de información (ⓘ) para abrir la pantalla "Acerca de" desde el header. */
+@Composable
+fun AboutIconButton(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            imageVector = Icons.Outlined.Info,
+            contentDescription = "Acerca de la app",
+            tint = TextSecondary
+        )
+    }
 }
 
 @Composable

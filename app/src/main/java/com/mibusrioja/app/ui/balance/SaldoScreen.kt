@@ -68,6 +68,7 @@ import com.mibusrioja.app.ui.components.AppTextField
 import com.mibusrioja.app.ui.components.Dimens
 import com.mibusrioja.app.ui.components.ErrorBanner
 import com.mibusrioja.app.ui.components.PrimaryButton
+import com.mibusrioja.app.ui.components.AboutIconButton
 import com.mibusrioja.app.ui.components.ScreenHeader
 import com.mibusrioja.app.ui.components.SecondaryButton
 import com.mibusrioja.app.ui.components.StatusPill
@@ -91,6 +92,7 @@ import java.util.Locale
 fun SaldoScreen(
     modifier: Modifier = Modifier,
     onOpenSalePoints: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
     viewModel: SaldoViewModel = hiltViewModel()
 ) {
     val cardNumber by viewModel.cardNumber.collectAsStateWithLifecycle()
@@ -120,7 +122,8 @@ fun SaldoScreen(
             item {
                 ScreenHeader(
                     title = "Mi saldo",
-                    subtitle = "Consultá el saldo de tu tarjeta Red Bus"
+                    subtitle = "Consultá el saldo de tu tarjeta Red Bus",
+                    trailing = { AboutIconButton(onClick = onOpenAbout) }
                 )
             }
 
