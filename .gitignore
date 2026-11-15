@@ -7,3 +7,6 @@
 /app/build/
 .cxx/
 *.apk
+
+# Capturas de red locales
+*.csv
