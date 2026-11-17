@@ -336,12 +336,8 @@ fun CreateAlertBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
     ) {
-            // Cabecera con indicador de pasos
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // Cabecera: título y, debajo, indicador de pasos
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "Nueva Alerta",
                     style = MaterialTheme.typography.titleLarge,
@@ -349,8 +345,11 @@ fun CreateAlertBottomSheet(
                     color = TextPrimary
                 )
 
+                Spacer(modifier = Modifier.height(12.dp))
+
                 // Indicador de pasos (1, 2, 3)
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -818,6 +817,8 @@ private fun StepBadge(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            softWrap = false,
             fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
             color = if (isCurrent) RiojaOrange else if (isDone) TextPrimary else TextMuted
         )
