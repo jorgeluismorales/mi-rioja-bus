@@ -1,5 +1,6 @@
 package com.mibusrioja.app
 
+import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.repository.BusRepository
 import com.mibusrioja.app.domain.usecase.GetConfigUseCase
 import kotlinx.coroutines.test.runTest
@@ -9,7 +10,7 @@ import org.junit.Test
 
 class GetConfigUseCaseTest {
 
-    private val useCase = GetConfigUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi()))
+    private val useCase = GetConfigUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi(), NoApiCache))
 
     @Test
     fun `filtra tarifas con precio cero bogus`() = runTest {

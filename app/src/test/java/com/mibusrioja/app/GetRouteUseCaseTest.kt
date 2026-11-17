@@ -1,5 +1,6 @@
 package com.mibusrioja.app
 
+import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.repository.BusRepository
 import com.mibusrioja.app.domain.usecase.GetRouteUseCase
 import kotlinx.coroutines.test.runTest
@@ -11,7 +12,7 @@ import org.junit.Test
 
 class GetRouteUseCaseTest {
 
-    private val useCase = GetRouteUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi()))
+    private val useCase = GetRouteUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi(), NoApiCache))
 
     @Test
     fun `mapea 67 paradas con codigoParada`() = runTest {

@@ -1,5 +1,6 @@
 package com.mibusrioja.app
 
+import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.api.model.PosicionDto
 import com.mibusrioja.app.data.api.model.PosicionResponse
 import com.mibusrioja.app.data.repository.BusRepository
@@ -13,7 +14,7 @@ class GetBusPositionsUseCaseTest {
 
     @Test
     fun `devuelve los buses visibles del fixture`() = runTest {
-        val useCase = GetBusPositionsUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi()))
+        val useCase = GetBusPositionsUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi(), NoApiCache))
         val positions = useCase("12").getOrThrow()
         assertEquals(2, positions.size)
         assertTrue(positions.all { it.interno.isNotBlank() })
@@ -32,7 +33,7 @@ class GetBusPositionsUseCaseTest {
                 )
             }
         )
-        val useCase = GetBusPositionsUseCase(BusRepository(api, FakeNominatimApi()))
+        val useCase = GetBusPositionsUseCase(BusRepository(api, FakeNominatimApi(), NoApiCache))
         val positions = useCase("12").getOrThrow()
         assertTrue(positions.none { it.interno == "99" })
         assertEquals(2, positions.size)

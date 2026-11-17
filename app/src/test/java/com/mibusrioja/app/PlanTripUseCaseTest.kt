@@ -1,5 +1,6 @@
 package com.mibusrioja.app
 
+import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.api.model.RutaLineaResponse
 import com.mibusrioja.app.data.repository.BusRepository
 import com.mibusrioja.app.domain.model.NoRouteException
@@ -21,7 +22,7 @@ class PlanTripUseCaseTest {
             else RutaLineaResponse(error = 1, nodos = emptyList())
         }
     )
-    private val repo = BusRepository(api, FakeNominatimApi())
+    private val repo = BusRepository(api, FakeNominatimApi(), NoApiCache)
     private val planTrip = PlanTripUseCase(
         GetLinesUseCase(repo),
         GetRouteUseCase(repo)

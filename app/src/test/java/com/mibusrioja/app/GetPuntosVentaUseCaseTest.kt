@@ -1,5 +1,6 @@
 package com.mibusrioja.app
 
+import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.repository.BusRepository
 import com.mibusrioja.app.domain.model.TipoPuntoVenta
 import com.mibusrioja.app.domain.usecase.GetPuntosVentaUseCase
@@ -10,7 +11,7 @@ import org.junit.Test
 
 class GetPuntosVentaUseCaseTest {
 
-    private val useCase = GetPuntosVentaUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi()))
+    private val useCase = GetPuntosVentaUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi(), NoApiCache))
 
     @Test
     fun `mapea tipos numericos al enum`() = runTest {

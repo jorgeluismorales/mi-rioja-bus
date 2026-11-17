@@ -6,7 +6,7 @@ Aplicación Android no oficial para el transporte público de La Rioja (Argentin
 
 ## Funcionalidades
 
-- **Mapa en tiempo real**: recorrido y paradas de cada línea, posición de los colectivos cada 2 s con flecha de rumbo, ícono diferenciado para unidades con rampa, agrupamiento de marcadores y detalle del colectivo seleccionado. Recuerda la última línea elegida.
+- **Mapa en tiempo real**: recorrido y paradas de cada línea, posición de los colectivos cada 1 s con flecha de rumbo, ícono diferenciado para unidades con rampa, agrupamiento de marcadores y detalle del colectivo seleccionado. Recuerda la última línea elegida.
 - **Planificador de viaje**: origen por GPS o dirección, búsqueda de destinos, destinos frecuentes y cálculo de recorridos directos o con un transbordo, con mapa del itinerario y duración estimada.
 - **Alertas de proximidad**: aviso por notificación cuando el colectivo o el usuario se acercan a una parada; se pueden activar para los pasos de un viaje planificado. Servicio en primer plano que se detiene solo al no quedar alertas activas.
 - **Tarifas vigentes**: valores dinámicos del servicio, con descuentos calculados y pase libre.

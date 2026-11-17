@@ -3,6 +3,9 @@ package com.mibusrioja.app.data.repository
 import com.mibusrioja.app.data.api.MireBusApi
 import com.mibusrioja.app.data.api.NominatimApi
 import com.mibusrioja.app.data.api.model.*
+import com.mibusrioja.app.data.local.ApiCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,32 +13,43 @@ import javax.inject.Singleton
 @Singleton
 class BusRepository @Inject constructor(
     private val api: MireBusApi,
-    private val nominatimApi: NominatimApi
+    private val nominatimApi: NominatimApi,
+    private val cache: ApiCache
 ) {
-    @Volatile private var configCache: ConfigResponse? = null
-    @Volatile private var gruposLineasCache: GruposLineasResponse? = null
-    private val rutaLineaCache = ConcurrentHashMap<String, RutaLineaResponse>()
+    /** Memoria de sesión; detrás está la caché persistente diaria ([ApiCache]). */
+    private val memory = ConcurrentHashMap<String, Any>()
 
-    /** Config general (tarifas, mapa, tiles). Cacheada durante la sesión. */
-    suspend fun getConfiguracion(forceRefresh: Boolean = false): Result<ConfigResponse> = runCatching {
-        if (!forceRefresh) configCache?.let { return@runCatching it }
-        api.getConfiguracion().also { configCache = it }
+    /**
+     * Datos estáticos: se piden al servidor sólo la primera vez en el día.
+     * Sin red, se usan los datos guardados aunque sean de un día anterior.
+     */
+    private suspend inline fun <reified T : Any> daily(
+        key: String,
+        forceRefresh: Boolean,
+        crossinline fetch: suspend () -> T
+    ): Result<T> = runCatching {
+        if (!forceRefresh) (memory[key] as? T)?.let { return@runCatching it }
+        val stored = if (forceRefresh) null else withContext(Dispatchers.IO) { cache.read(key, T::class.java) }
+        if (stored != null && stored.fresh) return@runCatching stored.data.also { memory[key] = it }
+        val fresh = runCatching { fetch() }.getOrElse { e -> stored?.data ?: throw e }
+        if (fresh !== stored?.data) withContext(Dispatchers.IO) { cache.write(key, T::class.java, fresh) }
+        fresh.also { memory[key] = it }
     }
 
-    /** Árbol de grupos/líneas. Cacheado durante la sesión. */
-    suspend fun getGruposLineas(forceRefresh: Boolean = false): Result<GruposLineasResponse> = runCatching {
-        if (!forceRefresh) gruposLineasCache?.let { return@runCatching it }
-        api.getGruposLineas().also { gruposLineasCache = it }
-    }
+    /** Config general (tarifas, mapa, tiles). Una consulta por día. */
+    suspend fun getConfiguracion(forceRefresh: Boolean = false): Result<ConfigResponse> =
+        daily("config", forceRefresh) { api.getConfiguracion() }
 
-    /** Recorrido completo con paradas (polyline). Cacheado por línea. */
+    /** Árbol de grupos/líneas. Una consulta por día. */
+    suspend fun getGruposLineas(forceRefresh: Boolean = false): Result<GruposLineasResponse> =
+        daily("grupos_lineas", forceRefresh) { api.getGruposLineas() }
+
+    /** Recorrido completo con paradas (polyline). Una consulta por línea y por día. */
     suspend fun getRutaLinea(
         codLinea: String,
         forceRefresh: Boolean = false
-    ): Result<RutaLineaResponse> = runCatching {
-        if (!forceRefresh) rutaLineaCache[codLinea]?.let { return@runCatching it }
-        api.getRutaLinea(codLinea).also { rutaLineaCache[codLinea] = it }
-    }
+    ): Result<RutaLineaResponse> =
+        daily("ruta_$codLinea", forceRefresh) { api.getRutaLinea(codLinea) }
 
     /** Posición en tiempo real de los buses */
     suspend fun getPosicionBuses(codLinea: String): Result<PosicionResponse> = runCatching {

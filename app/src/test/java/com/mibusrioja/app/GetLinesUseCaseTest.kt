@@ -1,5 +1,6 @@
 package com.mibusrioja.app
 
+import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.repository.BusRepository
 import com.mibusrioja.app.domain.usecase.GetLinesUseCase
 import kotlinx.coroutines.test.runTest
@@ -9,7 +10,7 @@ import org.junit.Test
 
 class GetLinesUseCaseTest {
 
-    private val useCase = GetLinesUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi()))
+    private val useCase = GetLinesUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi(), NoApiCache))
 
     @Test
     fun `aplana los grupos correctamente`() = runTest {

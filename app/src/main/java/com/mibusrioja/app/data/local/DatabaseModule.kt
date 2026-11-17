@@ -2,6 +2,8 @@ package com.mibusrioja.app.data.local
 
 import android.content.Context
 import androidx.room.Room
+import com.squareup.moshi.Moshi
+import java.io.File
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,6 +22,11 @@ object DatabaseModule {
             .addMigrations(MIGRATION_1_2)
             .fallbackToDestructiveMigration()
             .build()
+
+    @Provides
+    @Singleton
+    fun provideApiCache(@ApplicationContext context: Context, moshi: Moshi): ApiCache =
+        DailyApiCache(File(context.filesDir, "api_cache"), moshi)
 
     @Provides
     @Singleton

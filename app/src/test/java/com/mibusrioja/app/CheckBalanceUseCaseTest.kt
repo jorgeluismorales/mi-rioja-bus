@@ -1,5 +1,6 @@
 package com.mibusrioja.app
 
+import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.api.model.SaldoRequest
 import com.mibusrioja.app.data.api.model.SaldoResponse
 import com.mibusrioja.app.data.repository.BusRepository
@@ -13,7 +14,7 @@ import org.junit.Test
 class CheckBalanceUseCaseTest {
 
     private fun useCase(api: FakeMireBusApi) =
-        CheckBalanceUseCase(BusRepository(api, FakeNominatimApi()))
+        CheckBalanceUseCase(BusRepository(api, FakeNominatimApi(), NoApiCache))
 
     @Test
     fun `error 1 devuelve SaldoException con code 1`() = runTest {
@@ -56,7 +57,7 @@ class CheckBalanceUseCaseTest {
 
     @Test
     fun `parseSaldoValue soporta distintos formatos`() {
-        val uc = CheckBalanceUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi()))
+        val uc = CheckBalanceUseCase(BusRepository(FakeMireBusApi(), FakeNominatimApi(), NoApiCache))
         assertEquals(2300.0, uc.parseSaldoValue("2300.00 pasajes"), 0.001)
         assertEquals(-150.5, uc.parseSaldoValue("-150.50"), 0.001)
         assertEquals(1234.5, uc.parseSaldoValue("$1.234,50"), 0.001)
