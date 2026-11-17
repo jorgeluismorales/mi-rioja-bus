@@ -58,6 +58,7 @@ fun AlertsScreen(
 ) {
     val alerts by viewModel.alerts.collectAsStateWithLifecycle()
     val lineGroups by viewModel.lineGroups.collectAsStateWithLifecycle()
+    val lineNames by viewModel.lineNames.collectAsStateWithLifecycle()
     val selectedLine by viewModel.selectedLine.collectAsStateWithLifecycle()
     val stopsForLine by viewModel.stopsForLine.collectAsStateWithLifecycle()
     val isCreating by viewModel.isCreating.collectAsStateWithLifecycle()
@@ -157,6 +158,7 @@ fun AlertsScreen(
                         ) {
                             AlertCard(
                                 alert = alert,
+                                lineName = lineNames[alert.codLinea],
                                 onToggle = { activa -> viewModel.toggleAlert(alert.id, activa) },
                                 onDelete = { viewModel.deleteAlert(alert.id) }
                             )
@@ -185,6 +187,7 @@ fun AlertsScreen(
 @Composable
 fun AlertCard(
     alert: Alert,
+    lineName: String? = null,
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -214,8 +217,10 @@ fun AlertCard(
                         border = BorderStroke(1.dp, RiojaOrange.copy(alpha = 0.4f))
                     ) {
                         Text(
-                            text = "Línea ${alert.codLinea}",
+                            text = lineName?.let { "${alert.codLinea} · $it" } ?: "Línea ${alert.codLinea}",
                             style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             fontWeight = FontWeight.Bold,
                             color = RiojaOrange,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -503,7 +508,9 @@ fun CreateAlertBottomSheet(
                     ) {
                         Column {
                             Text(
-                                text = "Línea ${selectedLine?.codLinea ?: ""}",
+                                text = selectedLine?.let { "${it.codLinea} · ${it.descripcion}" } ?: "",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = RiojaOrange

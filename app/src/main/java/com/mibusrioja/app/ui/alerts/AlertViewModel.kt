@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -42,6 +43,14 @@ class AlertViewModel @Inject constructor(
 
     private val _lineGroups = MutableStateFlow<List<LineGroup>>(emptyList())
     val lineGroups: StateFlow<List<LineGroup>> = _lineGroups.asStateFlow()
+
+    /** codLinea -> nombre de la línea, para mostrar las alertas con un nombre legible. */
+    val lineNames: StateFlow<Map<String, String>> = _lineGroups
+        .map { groups -> groups.flatMap { flattenLines(it) }.associate { it.codLinea to it.descripcion } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    private fun flattenLines(group: LineGroup): List<BusLine> =
+        group.lineas + group.subGrupos.flatMap { flattenLines(it) }
 
     private val _selectedLine = MutableStateFlow<BusLine?>(null)
     val selectedLine: StateFlow<BusLine?> = _selectedLine.asStateFlow()
