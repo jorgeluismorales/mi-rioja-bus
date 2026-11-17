@@ -217,7 +217,7 @@ fun AlertCard(
                         border = BorderStroke(1.dp, RiojaOrange.copy(alpha = 0.4f))
                     ) {
                         Text(
-                            text = lineName?.let { "${alert.codLinea} · $it" } ?: "Línea ${alert.codLinea}",
+                            text = lineName ?: "Línea ${alert.codLinea}",
                             style = MaterialTheme.typography.labelMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -508,7 +508,7 @@ fun CreateAlertBottomSheet(
                     ) {
                         Column {
                             Text(
-                                text = selectedLine?.let { "${it.codLinea} · ${it.descripcion}" } ?: "",
+                                text = selectedLine?.descripcion ?: "",
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.titleMedium,
