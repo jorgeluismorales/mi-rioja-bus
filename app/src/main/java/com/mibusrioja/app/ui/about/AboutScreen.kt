@@ -14,12 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.rounded.DirectionsBus
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,30 +44,18 @@ import com.mibusrioja.app.ui.theme.WarningYellow
  * sin relación con Red Bus ni con Rioja Bus, y explica su origen.
  */
 @Composable
-fun AboutScreen(
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+fun AboutScreen(modifier: Modifier = Modifier) {
     Surface(modifier = modifier.fillMaxSize(), color = Background) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = Dimens.screenPadding, vertical = Dimens.lg),
+            contentPadding = PaddingValues(horizontal = Dimens.screenPadding, vertical = Dimens.xl),
             verticalArrangement = Arrangement.spacedBy(Dimens.md)
         ) {
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = TextPrimary
-                        )
-                    }
-                    ScreenHeader(
-                        title = "Acerca de la app",
-                        subtitle = "Mi Bus Rioja · versión ${BuildConfig.VERSION_NAME}"
-                    )
-                }
+                ScreenHeader(
+                    title = "Acerca de la app",
+                    subtitle = "Mi Bus Rioja · versión ${BuildConfig.VERSION_NAME}"
+                )
             }
 
             item {

@@ -41,7 +41,6 @@ import com.mibusrioja.app.ui.components.AppCard
 import com.mibusrioja.app.ui.components.Dimens
 import com.mibusrioja.app.ui.components.EmptyState
 import com.mibusrioja.app.ui.components.ErrorBanner
-import com.mibusrioja.app.ui.components.AboutIconButton
 import com.mibusrioja.app.ui.components.ScreenHeader
 import com.mibusrioja.app.ui.components.StatusPill
 import com.mibusrioja.app.ui.theme.Background
@@ -55,7 +54,6 @@ import com.mibusrioja.app.ui.theme.WarningYellow
 @Composable
 fun TarifasScreen(
     modifier: Modifier = Modifier,
-    onOpenAbout: () -> Unit = {},
     viewModel: TarifasViewModel = hiltViewModel()
 ) {
     val displays by viewModel.tarifaDisplays.collectAsStateWithLifecycle()
@@ -77,8 +75,7 @@ fun TarifasScreen(
             item {
                 ScreenHeader(
                     title = "Tarifas Vigentes",
-                    subtitle = "Precios oficiales de Red Bus La Rioja",
-                    trailing = { AboutIconButton(onClick = onOpenAbout) }
+                    subtitle = "Precios oficiales de Red Bus La Rioja"
                 )
             }
 

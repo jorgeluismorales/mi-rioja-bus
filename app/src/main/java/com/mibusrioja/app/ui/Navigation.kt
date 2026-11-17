@@ -49,7 +49,8 @@ private val bottomNavItems = listOf(
     BottomNavItem(Screen.Planner, "Planificar", Icons.Default.AltRoute),
     BottomNavItem(Screen.Alerts, "Alertas", Icons.Default.NotificationsActive),
     BottomNavItem(Screen.Tariffs, "Tarifas", Icons.Default.ConfirmationNumber),
-    BottomNavItem(Screen.Balance, "Saldo", Icons.Default.CreditCard)
+    BottomNavItem(Screen.Balance, "Saldo", Icons.Default.CreditCard),
+    BottomNavItem(Screen.About, "Info", Icons.Default.Info)
 )
 
 // ── AppBottomNav Composable ───────────────────────────────────────────────────
@@ -145,18 +146,13 @@ fun AppNavHost(
         composable(Screen.Map.route) { MapScreen() }
         composable(Screen.Planner.route) { TripPlannerScreen() }
         composable(Screen.Alerts.route) { AlertsScreen() }
-        composable(Screen.Tariffs.route) {
-            TarifasScreen(onOpenAbout = { navController.navigate(Screen.About.route) })
-        }
+        composable(Screen.Tariffs.route) { TarifasScreen() }
         composable(Screen.Balance.route) {
             SaldoScreen(
-                onOpenSalePoints = { navController.navigate(Screen.SalePoints.route) },
-                onOpenAbout = { navController.navigate(Screen.About.route) }
+                onOpenSalePoints = { navController.navigate(Screen.SalePoints.route) }
             )
         }
-        composable(Screen.About.route) {
-            AboutScreen(onBack = { navController.popBackStack() })
-        }
+        composable(Screen.About.route) { AboutScreen() }
         composable(Screen.SalePoints.route) {
             SalePointsScreen(onBack = { navController.popBackStack() })
         }
