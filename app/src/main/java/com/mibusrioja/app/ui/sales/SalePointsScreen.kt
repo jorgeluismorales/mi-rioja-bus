@@ -448,10 +448,10 @@ fun PuntoVentaCard(
     distanceMeters: Double?,
     onClick: () -> Unit
 ) {
-    val (typeColor, typeIcon, typeLabel) = when (punto.tipo) {
-        TipoPuntoVenta.ATM -> Triple(WarningYellow, Icons.Rounded.Atm, "Terminal ATM")
-        TipoPuntoVenta.COMUN -> Triple(SuccessGreen, Icons.Rounded.Storefront, "Comercio")
-        TipoPuntoVenta.ABONO -> Triple(InfoBlue, Icons.Rounded.Badge, "Centro Abono")
+    val (typeColor, typeIcon) = when (punto.tipo) {
+        TipoPuntoVenta.ATM -> WarningYellow to Icons.Rounded.Atm
+        TipoPuntoVenta.COMUN -> SuccessGreen to Icons.Rounded.Storefront
+        TipoPuntoVenta.ABONO -> InfoBlue to Icons.Rounded.Badge
     }
 
     Box(
@@ -530,35 +530,12 @@ fun PuntoVentaCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-
-                    // Descripción del tipo de punto
-                    if (punto.descripcionTipo.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Storefront,
-                                contentDescription = null,
-                                tint = TextMuted,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Text(
-                                text = punto.descripcionTipo,
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Distancia estimada calculada y badge del tipo
+            // Distancia estimada calculada
             Column(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -568,20 +545,6 @@ fun PuntoVentaCard(
                         text = formatDistance(distanceMeters),
                         color = RiojaOrange,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(typeColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = typeLabel,
-                        color = typeColor,
-                        fontSize = 9.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
