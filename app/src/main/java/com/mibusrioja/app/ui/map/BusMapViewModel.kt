@@ -161,6 +161,7 @@ class BusMapViewModel @Inject constructor(
         _selectedStop.value = null
         _stopArrivalTimes.value = emptyList()
         _busPositions.value = emptyList()
+        _lastBusUpdateMillis.value = null
         _routeNodes.value = emptyList()
         _error.value = null
 

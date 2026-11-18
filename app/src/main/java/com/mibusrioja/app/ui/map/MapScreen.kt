@@ -498,12 +498,20 @@ fun MapScreen(
                 }
             }
 
-            // ── 3. Badge informativo de colectivos activos ────────────────────
-            if (selectedLine != null && visibleBuses.isNotEmpty()) {
+            // ── 3. Badge de estado de colectivos (activos / sin colectivos) ───
+            // Se muestra recién cuando llegó la primera respuesta de posiciones.
+            if (selectedLine != null && lastBusUpdateMillis != null) {
+                val hasBuses = visibleBuses.isNotEmpty()
+                val accent = if (hasBuses) SuccessGreen else TextMuted
+                val label = when {
+                    hasBuses -> "${visibleBuses.size} ${if (visibleBuses.size == 1) "colectivo activo" else "colectivos activos"}"
+                    onlyRampa -> "Sin colectivos con rampa en circulación"
+                    else -> "Sin colectivos en circulación"
+                }
                 Surface(
                     shape = RoundedCornerShape(16.dp),
                     color = SurfaceDark.copy(alpha = 0.92f),
-                    border = BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.6f)),
+                    border = BorderStroke(1.dp, accent.copy(alpha = 0.6f)),
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(start = 16.dp, bottom = 28.dp)
@@ -515,12 +523,12 @@ fun MapScreen(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(SuccessGreen, CircleShape)
+                                .background(accent, CircleShape)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "${visibleBuses.size} ${if (visibleBuses.size == 1) "colectivo activo" else "colectivos activos"}",
-                            color = TextPrimary,
+                            text = label,
+                            color = if (hasBuses) TextPrimary else TextSecondary,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold
                         )
