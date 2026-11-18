@@ -12,7 +12,9 @@ import com.google.android.gms.location.*
 import com.mibusrioja.app.data.local.AlertEntity
 import com.mibusrioja.app.data.repository.AlertRepository
 import com.mibusrioja.app.domain.geo.GeoUtils
+import com.mibusrioja.app.domain.geo.RouteProgress
 import com.mibusrioja.app.domain.usecase.GetBusPositionsUseCase
+import com.mibusrioja.app.domain.usecase.GetRouteUseCase
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.*
 import javax.inject.Inject
@@ -37,6 +39,10 @@ class AlertForegroundService : Service() {
     @Inject lateinit var alertRepository: AlertRepository
     @Inject lateinit var notificationHelper: NotificationHelper
     @Inject lateinit var getBusPositionsUseCase: GetBusPositionsUseCase
+    @Inject lateinit var getRouteUseCase: GetRouteUseCase
+
+    /** Recorrido de cada línea con alertas (se carga una vez; viene de la caché diaria). */
+    private val routeProgress = mutableMapOf<String, RouteProgress>()
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
@@ -140,6 +146,17 @@ class AlertForegroundService : Service() {
         }
     }
 
+    private suspend fun routeFor(codLinea: String): RouteProgress? =
+        routeProgress[codLinea] ?: getRouteUseCase(codLinea).getOrNull()
+            ?.takeIf { it.size >= 2 }
+            ?.let { RouteProgress(it) }
+            ?.also { routeProgress[codLinea] = it }
+
+    /**
+     * Dispara la alerta sólo si algún colectivo **se acerca** a la parada: está detrás de ella
+     * en el sentido del recorrido y le faltan ≤ distancia metros por la traza. Un colectivo que
+     * ya pasó (aunque siga a pocos metros en línea recta) no avisa.
+     */
     private suspend fun checkBusProximity() {
         val alerts = activeAlerts
         if (alerts.isEmpty()) return
@@ -147,24 +164,39 @@ class AlertForegroundService : Service() {
         val lineas = alerts.map { it.codLinea }.distinct()
         for (codLinea in lineas) {
             val positions = getBusPositionsUseCase(codLinea).getOrNull() ?: continue
+            val route = routeFor(codLinea)
             val alertsDeLinea = alerts.filter { it.codLinea == codLinea }
             for (alert in alertsDeLinea) {
-                val closest = positions.minByOrNull { bus ->
-                    GeoUtils.distanceMeters(bus.lat, bus.lng, alert.latParada, alert.lngParada)
-                } ?: continue
-                val distance = GeoUtils.distanceMeters(
-                    closest.lat, closest.lng, alert.latParada, alert.lngParada
-                )
-                if (distance <= alert.distanciaMetros && alert.id !in firedBusAlerts) {
-                    firedBusAlerts.add(alert.id)
-                    notificationHelper.showBusAlertNotification(
-                        alertId = alert.id,
-                        title = "¡Tu colectivo está cerca!",
-                        text = "El interno ${closest.interno} de la línea $codLinea está a ${distance.roundToInt()} m de ${alert.paradaDescripcion}",
-                        isBusTrigger = true
-                    )
-                    Log.d(TAG, "Bus alert fired: ${alert.id} interno ${closest.interno} at ${distance}m")
-                } else if (distance > alert.distanciaMetros * 2) {
+                val stopIdx = route?.stopIndex(alert.codParada, alert.latParada, alert.lngParada)
+
+                // Para cada colectivo: metros que le faltan hasta la parada (null = ya pasó / fuera de ruta)
+                val approaching = positions.mapNotNull { bus ->
+                    val remaining = if (route != null && stopIdx != null) {
+                        val busIdx = route.locate(bus.lat, bus.lng, bus.orientacion.toDouble()) ?: return@mapNotNull null
+                        if (route.hasPassed(busIdx, stopIdx)) return@mapNotNull null
+                        route.metersToStop(busIdx, stopIdx) ?: return@mapNotNull null
+                    } else {
+                        // Sin recorrido disponible: distancia en línea recta (comportamiento anterior)
+                        GeoUtils.distanceMeters(bus.lat, bus.lng, alert.latParada, alert.lngParada)
+                    }
+                    bus to remaining
+                }
+                val closest = approaching.minByOrNull { it.second }
+
+                if (closest != null && closest.second <= alert.distanciaMetros) {
+                    if (alert.id !in firedBusAlerts) {
+                        firedBusAlerts.add(alert.id)
+                        val (bus, distance) = closest
+                        notificationHelper.showBusAlertNotification(
+                            alertId = alert.id,
+                            title = "¡Tu colectivo está cerca!",
+                            text = "El interno ${bus.interno} de la línea ${alert.lineaDescripcion.ifBlank { codLinea }} está a ${distance.roundToInt()} m de ${alert.paradaDescripcion}",
+                            isBusTrigger = true
+                        )
+                        Log.d(TAG, "Bus alert fired: ${alert.id} interno ${bus.interno} at ${distance}m")
+                    }
+                } else if (closest == null || closest.second > alert.distanciaMetros * 2) {
+                    // Ningún colectivo acercándose en rango: rearmar para el próximo
                     firedBusAlerts.remove(alert.id)
                 }
             }
