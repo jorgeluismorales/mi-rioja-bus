@@ -11,20 +11,27 @@ import com.mibusrioja.app.domain.model.LineGroup
 import com.mibusrioja.app.domain.model.FrequentDestination
 import com.mibusrioja.app.domain.model.PlaceSuggestion
 import com.mibusrioja.app.domain.model.TripPlan
-import com.mibusrioja.app.domain.model.TripStepType
+import com.mibusrioja.app.domain.model.alertTargets
+import com.mibusrioja.app.domain.model.hasActiveAlerts
 import com.mibusrioja.app.domain.usecase.CreateAlertUseCase
 import com.mibusrioja.app.domain.usecase.FindExistingAlertUseCase
+import com.mibusrioja.app.domain.usecase.GetAlertsUseCase
 import com.mibusrioja.app.domain.usecase.GetConfigUseCase
 import com.mibusrioja.app.domain.usecase.GetLinesUseCase
 import com.mibusrioja.app.domain.usecase.PlanTripUseCase
 import com.mibusrioja.app.domain.usecase.SearchPlacesUseCase
+import com.mibusrioja.app.domain.usecase.ToggleAlertUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -53,6 +60,8 @@ class TripViewModel @Inject constructor(
     private val planTripUseCase: PlanTripUseCase,
     private val createAlertUseCase: CreateAlertUseCase,
     private val findExistingAlertUseCase: FindExistingAlertUseCase,
+    private val getAlertsUseCase: GetAlertsUseCase,
+    private val toggleAlertUseCase: ToggleAlertUseCase,
     private val getLinesUseCase: GetLinesUseCase,
     private val searchPlacesUseCase: SearchPlacesUseCase,
     private val getConfigUseCase: GetConfigUseCase,
@@ -82,8 +91,14 @@ class TripViewModel @Inject constructor(
     private val _suggestions = MutableStateFlow<List<PlaceSuggestion>>(emptyList())
     val suggestions: StateFlow<List<PlaceSuggestion>> = _suggestions.asStateFlow()
 
-    private val _alertsAutoCreated = MutableStateFlow(0)
-    val alertsAutoCreated: StateFlow<Int> = _alertsAutoCreated.asStateFlow()
+    /** Sigue las alertas guardadas: si se elimina o pausa una, el viaje deja de figurar con alertas activadas. */
+    val tripAlertsActive: StateFlow<Boolean> =
+        combine(_tripPlan, getAlertsUseCase()) { plan, alerts -> plan?.hasActiveAlerts(alerts) == true }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    private val _alertsActivated = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    /** Cantidad de alertas recién activadas; se emite una sola vez por activación. */
+    val alertsActivated: SharedFlow<Int> = _alertsActivated.asSharedFlow()
 
     private val _availableLines = MutableStateFlow<List<BusLine>>(emptyList())
     val availableLines: StateFlow<List<BusLine>> = _availableLines.asStateFlow()
@@ -249,7 +264,6 @@ class TripViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
-            _alertsAutoCreated.value = 0
 
             planTripUseCase(
                 originLat = origin.first,
@@ -291,45 +305,31 @@ class TripViewModel @Inject constructor(
         if (_isActivatingAlerts.value) return
         viewModelScope.launch {
             _isActivatingAlerts.value = true
-            _alertsAutoCreated.value = createAutoAlerts(plan)
+            val activated = createAutoAlerts(plan)
+            if (activated > 0) _alertsActivated.tryEmit(activated)
             _isActivatingAlerts.value = false
         }
     }
 
     /**
      * Crea alertas de 100 m en cada transbordo y en la parada
-     * de bajada final, evitando duplicar alertas existentes.
+     * de bajada final, evitando duplicar alertas existentes
+     * y reactivando las que estaban pausadas.
      */
     private suspend fun createAutoAlerts(plan: TripPlan): Int {
-        var created = 0
-        val steps = plan.pasos
-        val busSteps = steps.filter { it.tipo == TripStepType.TOMAR_COLECTIVO }
+        var activated = 0
 
-        val candidates = mutableListOf<Pair<BusLine, com.mibusrioja.app.domain.model.RouteNode>>()
-
-        for (i in steps.indices) {
-            val step = steps[i]
-            if (step.tipo == TripStepType.TRANSBORDO) {
-                val prevBus = steps.take(i).lastOrNull { it.tipo == TripStepType.TOMAR_COLECTIVO }
-                val line = prevBus?.linea ?: step.linea
-                val stop = step.paradaOrigen
-                if (line != null && stop?.codParada != null) {
-                    candidates.add(line to stop)
-                }
-            }
-        }
-
-        busSteps.lastOrNull()?.let { last ->
-            val stop = last.paradaDestino
-            if (last.linea != null && stop?.codParada != null) {
-                candidates.add(last.linea!! to stop)
-            }
-        }
-
-        for ((line, stop) in candidates) {
+        for ((line, stop) in plan.alertTargets()) {
             val codParada = stop.codParada ?: continue
             try {
-                if (findExistingAlertUseCase(line.codLinea, codParada) != null) continue
+                val existing = findExistingAlertUseCase(line.codLinea, codParada)
+                if (existing != null) {
+                    if (!existing.activa) {
+                        toggleAlertUseCase(existing.id, true)
+                        activated++
+                    }
+                    continue
+                }
                 createAlertUseCase(
                     Alert(
                         codLinea = line.codLinea,
@@ -343,20 +343,19 @@ class TripViewModel @Inject constructor(
                         isTransbordo = true
                     )
                 )
-                created++
+                activated++
             } catch (_: Exception) {
             }
         }
 
-        if (created > 0) {
+        if (activated > 0) {
             geofenceManager.startMonitoring()
         }
-        return created
+        return activated
     }
 
     fun clearPlan() {
         _tripPlan.value = null
-        _alertsAutoCreated.value = 0
         _error.value = null
     }
 
