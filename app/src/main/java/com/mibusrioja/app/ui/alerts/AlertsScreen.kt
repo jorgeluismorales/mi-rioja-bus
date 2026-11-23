@@ -200,16 +200,14 @@ fun AlertCard(
             color = if (alert.activa) GlassBorder else DividerColor.copy(alpha = 0.4f)
         )
     ) {
-            // Fila superior: Línea, Transbordo badge, Botón eliminar
+            // Fila superior: Línea, Botón eliminar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                // El chip cede ancho para que el botón eliminar nunca quede fuera de la fila
+                Box(modifier = Modifier.weight(1f)) {
                     // Chip de Línea
                     Surface(
                         shape = RoundedCornerShape(8.dp),
@@ -224,14 +222,6 @@ fun AlertCard(
                             fontWeight = FontWeight.Bold,
                             color = RiojaOrange,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    // Badge de Transbordo Automático si aplica
-                    if (alert.isTransbordo) {
-                        StatusPill(
-                            text = "Transbordo automático",
-                            color = RiojaAmber
                         )
                     }
                 }

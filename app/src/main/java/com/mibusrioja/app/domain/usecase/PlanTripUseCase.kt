@@ -22,6 +22,8 @@ class PlanTripUseCase @Inject constructor(
 ) {
     private companion object {
         const val MAX_WALK_M = 800.0
+        /** Un solo colectivo caminando un poco más se prefiere a un transbordo. */
+        const val MAX_WALK_DIRECT_M = 1200.0
         const val MAX_TRANSFER_M = 300.0
         const val PLAN_TIMEOUT_MS = 30_000L
     }
@@ -50,8 +52,9 @@ class PlanTripUseCase @Inject constructor(
         }
 
         withContext(Dispatchers.Default) { withTimeout(PLAN_TIMEOUT_MS) {
-            val direct = findBestDirect(routes, originLat, originLng, destLat, destLng)
-            val plan = direct ?: findBestTransfer(routes, originLat, originLng, destLat, destLng)
+            val plan = findBestDirect(routes, originLat, originLng, destLat, destLng, MAX_WALK_M)
+                ?: findBestDirect(routes, originLat, originLng, destLat, destLng, MAX_WALK_DIRECT_M)
+                ?: findBestTransfer(routes, originLat, originLng, destLat, destLng)
             plan ?: throw NoRouteException(
                 "No encontramos un recorrido de colectivo entre tu ubicación y ese destino (buscamos paradas hasta 800 m)."
             )
@@ -95,17 +98,18 @@ class PlanTripUseCase @Inject constructor(
     private fun findBestDirect(
         routes: List<LineRoute>,
         originLat: Double, originLng: Double,
-        destLat: Double, destLng: Double
+        destLat: Double, destLng: Double,
+        maxWalkM: Double
     ): TripPlan? {
         var best: TripPlan? = null
         var bestScore = Double.MAX_VALUE
 
         for (route in routes) {
-            val board = route.stops.filter { dist(it.node, originLat, originLng) <= MAX_WALK_M }
+            val board = route.stops.filter { dist(it.node, originLat, originLng) <= maxWalkM }
             if (board.isEmpty()) continue
             for (a in board) {
                 val walkOrigen = dist(a.node, originLat, originLng)
-                val alightCandidates = route.stops.filter { it.nodeIndex > a.nodeIndex && dist(it.node, destLat, destLng) <= MAX_WALK_M }
+                val alightCandidates = route.stops.filter { it.nodeIndex > a.nodeIndex && dist(it.node, destLat, destLng) <= maxWalkM }
                 for (b in alightCandidates) {
                     val walkDestino = dist(b.node, destLat, destLng)
                     val score = walkOrigen + walkDestino
