@@ -36,15 +36,16 @@ data class DestinationPreset(
     val lng: Double
 )
 
+// Coordenadas tomadas de OpenStreetMap (Nominatim)
 val RIOJA_DESTINATIONS = listOf(
-    DestinationPreset("Plaza 25 de Mayo", "Centro cívico, La Rioja", -29.4134003, -66.8560292),
-    DestinationPreset("UNLaR", "Universidad Nacional de La Rioja", -29.434720, -66.871530),
-    DestinationPreset("Terminal de Ómnibus", "Av. General Artigas", -29.428310, -66.842720),
-    DestinationPreset("Hospital Regional Enrique Vera Barros", "Av. Ortiz de Ocampo", -29.418240, -66.878540),
-    DestinationPreset("Parque de la Ciudad", "Av. Circunvalación", -29.448500, -66.892000),
-    DestinationPreset("Hospital de la Madre y el Niño", "Av. 1° de Marzo", -29.426500, -66.862200),
-    DestinationPreset("Paseo Cultural Castro Barros", "Pelagio B. Luna 750", -29.414000, -66.856800),
-    DestinationPreset("Estadio Carlos Augusto Mercado Luna", "Vargas, La Rioja", -29.399500, -66.845600)
+    DestinationPreset("Plaza 25 de Mayo", "Centro cívico, La Rioja", -29.4127171, -66.8559256),
+    DestinationPreset("UNLaR", "Universidad Nacional de La Rioja", -29.4305503, -66.8705263),
+    DestinationPreset("Terminal de Ómnibus", "Av. General Artigas", -29.4408842, -66.8610517),
+    DestinationPreset("Hospital Regional Enrique Vera Barros", "Av. Ortiz de Ocampo", -29.4135923, -66.8350013),
+    DestinationPreset("Parque de la Ciudad", "Av. Circunvalación", -29.4410119, -66.8954177),
+    DestinationPreset("Hospital de la Madre y el Niño", "Av. 1° de Marzo", -29.4308454, -66.8422401),
+    DestinationPreset("Paseo Cultural Castro Barros", "Pelagio B. Luna 750", -29.4118725, -66.8587962),
+    DestinationPreset("Estadio Carlos Augusto Mercado Luna", "Vargas, La Rioja", -29.3954090, -66.8425408)
 )
 
 @HiltViewModel
@@ -205,7 +206,16 @@ class TripViewModel @Inject constructor(
     }
 
     fun selectFrequent(destination: FrequentDestination) {
-        setDestination(destination.nombre, destination.lat, destination.lng, destination.detalle)
+        // Un preset guardado con coordenadas anteriores se corrige al usarlo
+        val preset = RIOJA_DESTINATIONS.firstOrNull { it.title.equals(destination.nombre, ignoreCase = true) }
+        if (preset == null) {
+            setDestination(destination.nombre, destination.lat, destination.lng, destination.detalle)
+            return
+        }
+        setDestination(preset.title, preset.lat, preset.lng, destination.detalle)
+        viewModelScope.launch {
+            destinationHistoryRepository.relocate(destination.key, preset.lat, preset.lng)
+        }
     }
 
     fun removeFrequent(key: String) {

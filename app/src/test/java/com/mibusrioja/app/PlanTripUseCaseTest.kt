@@ -4,10 +4,12 @@ import com.mibusrioja.app.data.local.NoApiCache
 import com.mibusrioja.app.data.api.model.RutaLineaResponse
 import com.mibusrioja.app.data.repository.BusRepository
 import com.mibusrioja.app.domain.model.NoRouteException
+import com.mibusrioja.app.domain.model.TripPlan
 import com.mibusrioja.app.domain.model.TripStepType
 import com.mibusrioja.app.domain.usecase.GetLinesUseCase
 import com.mibusrioja.app.domain.usecase.GetRouteUseCase
 import com.mibusrioja.app.domain.usecase.PlanTripUseCase
+import com.mibusrioja.app.ui.planner.RIOJA_DESTINATIONS
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -48,6 +50,39 @@ class PlanTripUseCaseTest {
         assertEquals("p001-te", busStep.paradaOrigen!!.codParada)
         assertTrue(busStep.recorrido.isNotEmpty())
         assertTrue(plan.duracionEstimadaMin > 0)
+    }
+
+    // Líneas 11 (pasa por el origen y cerca de la UNLaR) y 22 (para dentro del barrio de la UNLaR)
+    private val planTripNorteSur = BusRepository(
+        FakeMireBusApi(
+            routeProvider = { cod ->
+                when (cod) {
+                    "11" -> TestFixtures.parse("rutaLinea_11.json")
+                    "22" -> TestFixtures.parse("rutaLinea_22.json")
+                    else -> RutaLineaResponse(error = 1, nodos = emptyList())
+                }
+            }
+        ),
+        FakeNominatimApi(),
+        NoApiCache
+    ).let { PlanTripUseCase(GetLinesUseCase(it), GetRouteUseCase(it)) }
+
+    private fun assertSoloLinea11(plan: TripPlan) {
+        val busSteps = plan.pasos.filter { it.tipo == TripStepType.TOMAR_COLECTIVO }
+        assertEquals(listOf("11"), busSteps.map { it.linea!!.codLinea })
+        assertTrue(plan.pasos.none { it.tipo == TripStepType.TRANSBORDO })
+    }
+
+    @Test
+    fun `de barrio norte a UNLaR recomienda un solo colectivo`() = runTest {
+        val unlar = RIOJA_DESTINATIONS.first { it.title == "UNLaR" }
+        assertSoloLinea11(planTripNorteSur(-29.3888087, -66.8231107, unlar.lat, unlar.lng).getOrThrow())
+    }
+
+    @Test
+    fun `prefiere un directo caminando mas de 800 m antes que un transbordo`() = runTest {
+        // La parada más cercana de la línea 11 queda a ~870 m; la línea 22 para a 70 m
+        assertSoloLinea11(planTripNorteSur(-29.3888087, -66.8231107, -29.434720, -66.871530).getOrThrow())
     }
 
     @Test

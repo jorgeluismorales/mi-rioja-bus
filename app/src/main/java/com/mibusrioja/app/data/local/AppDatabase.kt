@@ -72,6 +72,23 @@ interface FrequentDestinationDao {
 
     @Query("DELETE FROM frequent_destinations WHERE key = :key")
     suspend fun delete(key: String)
+
+    /** Mueve una entrada a otra clave; si ya había una en el destino, suma los usos y conserva el último uso. */
+    @Transaction
+    suspend fun relocate(oldKey: String, newKey: String, lat: Double, lng: Double) {
+        val old = find(oldKey) ?: return
+        val existing = find(newKey)
+        upsert(
+            old.copy(
+                key = newKey,
+                lat = lat,
+                lng = lng,
+                vecesUsado = old.vecesUsado + (existing?.vecesUsado ?: 0),
+                ultimoUso = maxOf(old.ultimoUso, existing?.ultimoUso ?: 0L)
+            )
+        )
+        delete(oldKey)
+    }
 }
 
 // ── Database ──────────────────────────────────────────────────────────────────
