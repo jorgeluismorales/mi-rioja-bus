@@ -86,7 +86,7 @@ fun TripPlannerScreen(
     val originLocation by viewModel.originLocation.collectAsStateWithLifecycle()
     val destDescription by viewModel.destDescription.collectAsStateWithLifecycle()
     val destLocation by viewModel.destLocation.collectAsStateWithLifecycle()
-    val alertsAutoCreated by viewModel.alertsAutoCreated.collectAsStateWithLifecycle()
+    val tripAlertsActive by viewModel.tripAlertsActive.collectAsStateWithLifecycle()
     val isActivatingAlerts by viewModel.isActivatingAlerts.collectAsStateWithLifecycle()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val tileUrl by viewModel.tileUrl.collectAsStateWithLifecycle()
@@ -149,10 +149,10 @@ fun TripPlannerScreen(
     }
 
     // Snackbar para alertas automáticas
-    LaunchedEffect(alertsAutoCreated) {
-        if (alertsAutoCreated > 0) {
+    LaunchedEffect(Unit) {
+        viewModel.alertsActivated.collect { count ->
             snackbarHostState.showSnackbar(
-                message = "Se activaron $alertsAutoCreated ${if (alertsAutoCreated == 1) "alerta" else "alertas"} de proximidad para este viaje"
+                message = "Se activaron $count ${if (count == 1) "alerta" else "alertas"} de proximidad para este viaje"
             )
         }
     }
@@ -383,7 +383,7 @@ fun TripPlannerScreen(
                     }
 
                     item {
-                        if (alertsAutoCreated > 0) {
+                        if (tripAlertsActive) {
                             StatusPill(
                                 text = "Alertas de proximidad activadas para este viaje",
                                 color = SuccessGreen

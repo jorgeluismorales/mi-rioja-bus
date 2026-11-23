@@ -122,6 +122,34 @@ data class TripStep(
 
 enum class TripStepType { CAMINAR, TOMAR_COLECTIVO, TRANSBORDO, LLEGAR }
 
+/** Paradas del viaje que llevan alerta de proximidad: cada transbordo y la bajada final. */
+fun TripPlan.alertTargets(): List<Pair<BusLine, RouteNode>> {
+    val targets = mutableListOf<Pair<BusLine, RouteNode>>()
+    for (i in pasos.indices) {
+        val step = pasos[i]
+        if (step.tipo == TripStepType.TRANSBORDO) {
+            val prevBus = pasos.take(i).lastOrNull { it.tipo == TripStepType.TOMAR_COLECTIVO }
+            val line = prevBus?.linea ?: step.linea
+            val stop = step.paradaOrigen
+            if (line != null && stop?.codParada != null) targets.add(line to stop)
+        }
+    }
+    pasos.lastOrNull { it.tipo == TripStepType.TOMAR_COLECTIVO }?.let { last ->
+        val line = last.linea
+        val stop = last.paradaDestino
+        if (line != null && stop?.codParada != null) targets.add(line to stop)
+    }
+    return targets
+}
+
+/** True si cada parada con alerta del viaje tiene hoy una alerta activa. */
+fun TripPlan.hasActiveAlerts(alerts: List<Alert>): Boolean {
+    val targets = alertTargets()
+    return targets.isNotEmpty() && targets.all { (line, stop) ->
+        alerts.any { it.activa && it.codLinea == line.codLinea && it.codParada == stop.codParada }
+    }
+}
+
 // ── Tiempo estimado ───────────────────────────────────────────────────────────
 data class TiempoEstimado(
     val segundosFaltantes: Int?,
