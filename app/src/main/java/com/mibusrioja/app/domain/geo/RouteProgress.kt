@@ -4,6 +4,7 @@ import com.mibusrioja.app.domain.model.RouteNode
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.sin
 
 /**
@@ -20,6 +21,8 @@ class RouteProgress(private val nodes: List<RouteNode>) {
         const val CANDIDATE_RADIUS_M = 80.0
         const val OFF_ROUTE_M = 150.0
         const val LOOP_CLOSE_M = 200.0
+        /** Un colectivo hasta esta distancia después de la parada se considera detenido en ella. */
+        const val AT_STOP_TOLERANCE_M = 20.0
         /** Penalización en metros equivalentes por cada grado de diferencia de rumbo. */
         const val HEADING_PENALTY_M_PER_DEG = 1.0
     }
@@ -50,48 +53,64 @@ class RouteProgress(private val nodes: List<RouteNode>) {
             ?.takeIf { GeoUtils.distanceMeters(nodes[it].lat, nodes[it].lng, lat, lng) <= OFF_ROUTE_M }
     }
 
-    /** Rumbo (0..360, 0 = norte) del tramo del recorrido en el nodo [i]. */
-    fun segmentBearing(i: Int): Double {
-        val (from, to) = if (i < nodes.lastIndex) nodes[i] to nodes[i + 1] else nodes[i - 1] to nodes[i]
-        return bearing(from.lat, from.lng, to.lat, to.lng)
-    }
+    /** Rumbo (0..360, 0 = norte) del tramo que sale del nodo [i]. */
+    private fun segmentBearing(i: Int): Double =
+        bearing(nodes[i].lat, nodes[i].lng, nodes[i + 1].lat, nodes[i + 1].lng)
 
     /**
-     * Nodo del recorrido donde está el colectivo. Entre los nodos cercanos elige el que
-     * mejor coincide con el rumbo; `null` si está fuera del recorrido.
+     * Metros recorridos desde el inicio hasta el punto del recorrido donde está el colectivo;
+     * `null` si está fuera del recorrido.
+     *
+     * Se proyecta la posición sobre cada **tramo** (no sobre los nodos, que pueden estar a más
+     * de 300 m entre sí) y, entre los tramos cercanos, se elige el que mejor coincide con el rumbo.
      */
-    fun locate(lat: Double, lng: Double, headingDeg: Double?): Int? {
-        var best: Int? = null
+    fun locate(lat: Double, lng: Double, headingDeg: Double?): Double? {
+        var best: Double? = null
         var bestScore = Double.MAX_VALUE
-        var nearest: Int? = null
-        var nearestDist = Double.MAX_VALUE
-        for (i in nodes.indices) {
-            val d = GeoUtils.distanceMeters(nodes[i].lat, nodes[i].lng, lat, lng)
-            if (d < nearestDist) { nearestDist = d; nearest = i }
-            if (d > CANDIDATE_RADIUS_M) continue
+        var fallback: Double? = null
+        var fallbackScore = Double.MAX_VALUE
+        val metersPerDegLat = Math.toRadians(1.0) * GeoUtils.EARTH_RADIUS_M
+        val metersPerDegLng = metersPerDegLat * cos(Math.toRadians(lat))
+        for (i in 0 until nodes.lastIndex) {
+            val length = cumulative[i + 1] - cumulative[i]
+            if (length <= 0.0) continue
+            // Coordenadas planas en metros con origen en el colectivo
+            val ax = (nodes[i].lng - lng) * metersPerDegLng
+            val ay = (nodes[i].lat - lat) * metersPerDegLat
+            val dx = (nodes[i + 1].lng - nodes[i].lng) * metersPerDegLng
+            val dy = (nodes[i + 1].lat - nodes[i].lat) * metersPerDegLat
+            val t = (-(ax * dx + ay * dy) / (dx * dx + dy * dy)).coerceIn(0.0, 1.0)
+            val d = hypot(ax + t * dx, ay + t * dy)
+            if (d > OFF_ROUTE_M) continue
             val penalty = headingDeg?.let { angleDiff(it, segmentBearing(i)) * HEADING_PENALTY_M_PER_DEG } ?: 0.0
             val score = d + penalty
-            if (score < bestScore) { bestScore = score; best = i }
+            val meters = cumulative[i] + t * length
+            if (d <= CANDIDATE_RADIUS_M) {
+                if (score < bestScore) { bestScore = score; best = meters }
+            } else if (score < fallbackScore) {
+                fallbackScore = score; fallback = meters
+            }
         }
-        return best ?: nearest?.takeIf { nearestDist <= OFF_ROUTE_M }
+        return best ?: fallback
     }
 
     /**
-     * Metros que le faltan al colectivo (en [busIndex]) para llegar a la parada ([stopIndex])
-     * siguiendo el recorrido. Si ya la pasó: en un circuito, lo que falta para la próxima
-     * vuelta; si no, `null`.
+     * Metros que le faltan al colectivo (a [busMeters] del inicio) para llegar a la parada
+     * ([stopIndex]) siguiendo el recorrido. Si ya la pasó: en un circuito, lo que falta para
+     * la próxima vuelta; si no, `null`.
      */
-    fun metersToStop(busIndex: Int, stopIndex: Int): Double? {
-        val ahead = cumulative[stopIndex] - cumulative[busIndex]
+    fun metersToStop(busMeters: Double, stopIndex: Int): Double? {
+        val ahead = cumulative[stopIndex] - busMeters
         return when {
-            ahead >= 0 -> ahead
+            ahead >= -AT_STOP_TOLERANCE_M -> ahead.coerceAtLeast(0.0)
             isLoop -> totalMeters + ahead
             else -> null
         }
     }
 
     /** `true` si el colectivo ya pasó la parada en esta vuelta. */
-    fun hasPassed(busIndex: Int, stopIndex: Int): Boolean = busIndex > stopIndex
+    fun hasPassed(busMeters: Double, stopIndex: Int): Boolean =
+        busMeters > cumulative[stopIndex] + AT_STOP_TOLERANCE_M
 
     private fun angleDiff(a: Double, b: Double): Double {
         val d = abs(((a - b) % 360 + 360) % 360)

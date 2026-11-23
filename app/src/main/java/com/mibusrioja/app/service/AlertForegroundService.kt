@@ -172,9 +172,9 @@ class AlertForegroundService : Service() {
                 // Para cada colectivo: metros que le faltan hasta la parada (null = ya pasó / fuera de ruta)
                 val approaching = positions.mapNotNull { bus ->
                     val remaining = if (route != null && stopIdx != null) {
-                        val busIdx = route.locate(bus.lat, bus.lng, bus.orientacion.toDouble()) ?: return@mapNotNull null
-                        if (route.hasPassed(busIdx, stopIdx)) return@mapNotNull null
-                        route.metersToStop(busIdx, stopIdx) ?: return@mapNotNull null
+                        val busMeters = route.locate(bus.lat, bus.lng, bus.orientacion.toDouble()) ?: return@mapNotNull null
+                        if (route.hasPassed(busMeters, stopIdx)) return@mapNotNull null
+                        route.metersToStop(busMeters, stopIdx) ?: return@mapNotNull null
                     } else {
                         // Sin recorrido disponible: distancia en línea recta (comportamiento anterior)
                         GeoUtils.distanceMeters(bus.lat, bus.lng, alert.latParada, alert.lngParada)
