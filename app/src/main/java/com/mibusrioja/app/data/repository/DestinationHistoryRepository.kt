@@ -46,17 +46,7 @@ class DestinationHistoryRepository @Inject constructor(
     suspend fun relocate(key: String, lat: Double, lng: Double) {
         val newKey = keyFor(lat, lng)
         if (newKey == key) return
-        val old = dao.find(key) ?: return
-        val merged = dao.find(newKey)
-        dao.upsert(
-            old.copy(
-                key = newKey,
-                lat = lat,
-                lng = lng,
-                vecesUsado = old.vecesUsado + (merged?.vecesUsado ?: 0)
-            )
-        )
-        dao.delete(key)
+        dao.relocate(key, newKey, lat, lng)
     }
 
     private fun keyFor(lat: Double, lng: Double) = "%.4f,%.4f".format(Locale.US, lat, lng)

@@ -39,6 +39,16 @@ class DestinationHistoryRepositoryTest {
     }
 
     @Test
+    fun `relocate conserva el ultimo uso mas reciente`() = runTest {
+        dao.upsert(FrequentDestinationEntity("-29.4347,-66.8715", "UNLaR", "", -29.434720, -66.871530, 2, ultimoUso = 100L))
+        dao.upsert(FrequentDestinationEntity("-29.4306,-66.8705", "UNLaR", "", -29.4305503, -66.8705263, 1, ultimoUso = 500L))
+
+        repo.relocate("-29.4347,-66.8715", -29.4305503, -66.8705263)
+
+        assertEquals(500L, dao.rows.values.single().ultimoUso)
+    }
+
+    @Test
     fun `relocate a las mismas coordenadas no cambia nada`() = runTest {
         repo.registerVisit("UNLaR", "", -29.4305503, -66.8705263)
         repo.relocate("-29.4306,-66.8705", -29.4305503, -66.8705263)
