@@ -206,7 +206,16 @@ class TripViewModel @Inject constructor(
     }
 
     fun selectFrequent(destination: FrequentDestination) {
-        setDestination(destination.nombre, destination.lat, destination.lng, destination.detalle)
+        // Un preset guardado con coordenadas anteriores se corrige al usarlo
+        val preset = RIOJA_DESTINATIONS.firstOrNull { it.title.equals(destination.nombre, ignoreCase = true) }
+        if (preset == null) {
+            setDestination(destination.nombre, destination.lat, destination.lng, destination.detalle)
+            return
+        }
+        setDestination(preset.title, preset.lat, preset.lng, destination.detalle)
+        viewModelScope.launch {
+            destinationHistoryRepository.relocate(destination.key, preset.lat, preset.lng)
+        }
     }
 
     fun removeFrequent(key: String) {

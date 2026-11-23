@@ -27,7 +27,7 @@ class DestinationHistoryRepository @Inject constructor(
     }
 
     suspend fun registerVisit(nombre: String, detalle: String, lat: Double, lng: Double) {
-        val key = "%.4f,%.4f".format(Locale.US, lat, lng)
+        val key = keyFor(lat, lng)
         val existing = dao.find(key)
         dao.upsert(
             FrequentDestinationEntity(
@@ -41,6 +41,25 @@ class DestinationHistoryRepository @Inject constructor(
             )
         )
     }
+
+    /** Mueve un destino guardado a coordenadas corregidas, conservando su historial de uso. */
+    suspend fun relocate(key: String, lat: Double, lng: Double) {
+        val newKey = keyFor(lat, lng)
+        if (newKey == key) return
+        val old = dao.find(key) ?: return
+        val merged = dao.find(newKey)
+        dao.upsert(
+            old.copy(
+                key = newKey,
+                lat = lat,
+                lng = lng,
+                vecesUsado = old.vecesUsado + (merged?.vecesUsado ?: 0)
+            )
+        )
+        dao.delete(key)
+    }
+
+    private fun keyFor(lat: Double, lng: Double) = "%.4f,%.4f".format(Locale.US, lat, lng)
 
     suspend fun remove(key: String) {
         dao.delete(key)
