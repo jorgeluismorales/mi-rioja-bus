@@ -11,6 +11,7 @@ import androidx.core.app.ActivityCompat
 import com.google.android.gms.location.*
 import com.mibusrioja.app.data.local.AlertEntity
 import com.mibusrioja.app.data.repository.AlertRepository
+import com.mibusrioja.app.domain.geo.BusTracker
 import com.mibusrioja.app.domain.geo.GeoUtils
 import com.mibusrioja.app.domain.geo.RouteProgress
 import com.mibusrioja.app.domain.usecase.GetBusPositionsUseCase
@@ -43,6 +44,7 @@ class AlertForegroundService : Service() {
 
     /** Recorrido de cada línea con alertas (se carga una vez; viene de la caché diaria). */
     private val routeProgress = mutableMapOf<String, RouteProgress>()
+    private val busTrackers = mutableMapOf<String, BusTracker>()
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
@@ -165,16 +167,23 @@ class AlertForegroundService : Service() {
         for (codLinea in lineas) {
             val positions = getBusPositionsUseCase(codLinea).getOrNull() ?: continue
             val route = routeFor(codLinea)
+            val tracker = route?.let { busTrackers.getOrPut(codLinea) { BusTracker(it) } }
+            tracker?.retainBuses(positions.map { it.interno }.toSet())
+            // Puntos del recorrido donde puede estar cada colectivo (vacío = fuera de ruta)
+            val located = tracker?.let { t ->
+                positions.map { t.locate(it.interno, it.lat, it.lng, it.orientacion.toDouble()) }
+            }
             val alertsDeLinea = alerts.filter { it.codLinea == codLinea }
             for (alert in alertsDeLinea) {
                 val stopIdx = route?.stopIndex(alert.codParada, alert.latParada, alert.lngParada)
 
                 // Para cada colectivo: metros que le faltan hasta la parada (null = ya pasó / fuera de ruta)
-                val approaching = positions.mapNotNull { bus ->
-                    val remaining = if (route != null && stopIdx != null) {
-                        val busMeters = route.locate(bus.lat, bus.lng, bus.orientacion.toDouble()) ?: return@mapNotNull null
-                        if (route.hasPassed(busMeters, stopIdx)) return@mapNotNull null
-                        route.metersToStop(busMeters, stopIdx) ?: return@mapNotNull null
+                val approaching = positions.mapIndexedNotNull { i, bus ->
+                    val remaining = if (route != null && located != null && stopIdx != null) {
+                        located[i]
+                            .filterNot { route.hasPassed(it, stopIdx) }
+                            .mapNotNull { route.metersToStop(it, stopIdx) }
+                            .minOrNull() ?: return@mapIndexedNotNull null
                     } else {
                         // Sin recorrido disponible: distancia en línea recta (comportamiento anterior)
                         GeoUtils.distanceMeters(bus.lat, bus.lng, alert.latParada, alert.lngParada)
