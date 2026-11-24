@@ -106,7 +106,8 @@ fun TripPlannerScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 val granted = hasLocationPermission(context)
-                if (granted && !hasLocationPermission) viewModel.onLocationPermissionGranted()
+                // También al entrar: si Android mató el proceso al revocar el permiso, el servicio quedó detenido.
+                if (granted) viewModel.onLocationPermissionGranted()
                 hasLocationPermission = granted
             }
         }
