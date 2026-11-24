@@ -303,6 +303,10 @@ class TripViewModel @Inject constructor(
     fun activateTripAlerts() {
         val plan = _tripPlan.value ?: return
         if (_isActivatingAlerts.value) return
+        if (!geofenceManager.hasLocationPermission()) {
+            onAlertsPermissionDenied()
+            return
+        }
         viewModelScope.launch {
             _isActivatingAlerts.value = true
             val activated = createAutoAlerts(plan)
@@ -318,6 +322,7 @@ class TripViewModel @Inject constructor(
      */
     private suspend fun createAutoAlerts(plan: TripPlan): Int {
         var activated = 0
+        var alreadyActive = false
 
         for ((line, stop) in plan.alertTargets()) {
             val codParada = stop.codParada ?: continue
@@ -327,6 +332,8 @@ class TripViewModel @Inject constructor(
                     if (!existing.activa) {
                         toggleAlertUseCase(existing.id, true)
                         activated++
+                    } else {
+                        alreadyActive = true
                     }
                     continue
                 }
@@ -348,7 +355,7 @@ class TripViewModel @Inject constructor(
             }
         }
 
-        if (activated > 0) {
+        if (activated > 0 || alreadyActive) {
             geofenceManager.startMonitoring()
         }
         return activated
@@ -357,6 +364,10 @@ class TripViewModel @Inject constructor(
     fun clearPlan() {
         _tripPlan.value = null
         _error.value = null
+    }
+
+    fun onAlertsPermissionDenied() {
+        _error.value = "Concedé el permiso de ubicación para activar las alertas del viaje"
     }
 
     fun clearError() {

@@ -23,13 +23,7 @@ class GeofenceManager @Inject constructor(
      * permiso de ubicación (FINE ni COARSE) y no lo inicia.
      */
     fun startMonitoring(): Boolean {
-        val fine = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!fine && !coarse) return false
+        if (!hasLocationPermission()) return false
 
         val intent = Intent(context, AlertForegroundService::class.java).apply {
             action = AlertForegroundService.ACTION_START
@@ -37,6 +31,14 @@ class GeofenceManager @Inject constructor(
         context.startForegroundService(intent)
         return true
     }
+
+    fun hasLocationPermission(): Boolean =
+        listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ).any {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
 
     fun stopMonitoring() {
         val intent = Intent(context, AlertForegroundService::class.java).apply {
