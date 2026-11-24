@@ -44,6 +44,7 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideMoshi(): Moshi = Moshi.Builder()
+        .add(String::class.java, BrokenAccents.stringAdapter)
         .addLast(KotlinJsonAdapterFactory())
         .build()
 

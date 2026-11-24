@@ -1,6 +1,5 @@
 Pendientes de Mi Bus Rioja
 
 - Sin permiso de ubicación, las alertas del viaje figuran como activadas en el planificador pero nunca notifican. Hay que pedir el permiso antes de activarlas.
-- Algunos nombres de paradas muestran símbolos raros en lugar de las letras con acento.
 - Las notificaciones de alertas deben tener vibración y sonido aun con el teléfono silenciado.
 - Las alertas deben permitir editar la distancia.
