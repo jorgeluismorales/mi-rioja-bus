@@ -7,7 +7,7 @@ import kotlin.math.sqrt
 
 object GeoUtils {
 
-    private const val EARTH_RADIUS_M = 6_371_008.8
+    const val EARTH_RADIUS_M = 6_371_008.8
 
     /** Distancia haversine en metros entre dos coordenadas lat/lng. */
     fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
