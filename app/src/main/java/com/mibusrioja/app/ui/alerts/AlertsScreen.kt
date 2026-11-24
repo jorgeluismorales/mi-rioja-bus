@@ -12,6 +12,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -859,7 +861,7 @@ private fun EditDistanceDialog(
         containerColor = SurfaceDark,
         title = { Text("Distancia de aviso", color = TextPrimary) },
         text = {
-            Column {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 Text(
                     text = "Te avisaremos cuando el colectivo esté a esta distancia de tu parada.",
                     style = MaterialTheme.typography.bodySmall,
