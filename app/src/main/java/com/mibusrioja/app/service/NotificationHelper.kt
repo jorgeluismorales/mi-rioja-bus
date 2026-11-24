@@ -117,7 +117,9 @@ class NotificationHelper @Inject constructor(
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
 
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        // getDefaultUri() devuelve un alias aunque el tono elegido sea "Ninguno".
+        val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_NOTIFICATION)
+            ?: RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
         runCatching {
             RingtoneManager.getRingtone(context, uri)?.apply {
