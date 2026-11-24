@@ -37,10 +37,13 @@ class NotificationHelper @Inject constructor(
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     fun createChannels() {
+        // Si el usuario había bloqueado el canal viejo, el nuevo nace bloqueado también.
+        val legacyBlocked = notifManager.getNotificationChannel(LEGACY_CHANNEL_ALERTS_ID)
+            ?.importance == NotificationManager.IMPORTANCE_NONE
         val alertsChannel = NotificationChannel(
             CHANNEL_ALERTS_ID,
             context.getString(R.string.channel_alerts_name),
-            NotificationManager.IMPORTANCE_HIGH
+            if (legacyBlocked) NotificationManager.IMPORTANCE_NONE else NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = context.getString(R.string.channel_alerts_desc)
             // Sonido y vibración los emite playAlarmFeedback() con uso de alarma,
