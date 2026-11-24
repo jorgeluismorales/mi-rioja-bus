@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -364,6 +365,13 @@ class TripViewModel @Inject constructor(
     fun clearPlan() {
         _tripPlan.value = null
         _error.value = null
+    }
+
+    /** Sin permiso el servicio de alertas se detiene; al recuperarlo hay que volver a iniciarlo. */
+    fun onLocationPermissionGranted() {
+        viewModelScope.launch {
+            if (getAlertsUseCase().first().any { it.activa }) geofenceManager.startMonitoring()
+        }
     }
 
     fun onAlertsPermissionDenied() {

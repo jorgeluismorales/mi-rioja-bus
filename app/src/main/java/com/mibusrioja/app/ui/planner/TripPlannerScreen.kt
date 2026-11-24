@@ -105,7 +105,9 @@ fun TripPlannerScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                hasLocationPermission = hasLocationPermission(context)
+                val granted = hasLocationPermission(context)
+                if (granted && !hasLocationPermission) viewModel.onLocationPermissionGranted()
+                hasLocationPermission = granted
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -122,6 +124,7 @@ fun TripPlannerScreen(
         val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (fineGranted || coarseGranted) {
+            if (!hasLocationPermission) viewModel.onLocationPermissionGranted()
             hasLocationPermission = true
             fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
                 if (location != null) {
