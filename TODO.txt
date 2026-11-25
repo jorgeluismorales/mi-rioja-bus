@@ -1,5 +1,3 @@
 Pendientes de Mi Bus Rioja
 
-- Algunos nombres de paradas muestran símbolos raros en lugar de las letras con acento.
-- Las notificaciones de alertas deben tener vibración y sonido aun con el teléfono silenciado.
-- Las alertas deben permitir editar la distancia.
+(Sin pendientes por ahora.)
