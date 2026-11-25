@@ -99,12 +99,20 @@ fun TripPlannerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Manejo de permisos de GPS
-    var hasLocationPermission by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        )
+    var hasLocationPermission by remember { mutableStateOf(hasLocationPermission(context)) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val granted = hasLocationPermission(context)
+                // También al entrar: si Android mató el proceso al revocar el permiso, el servicio quedó detenido.
+                if (granted) viewModel.onLocationPermissionGranted()
+                hasLocationPermission = granted
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val fusedLocationClient = remember {
@@ -117,6 +125,7 @@ fun TripPlannerScreen(
         val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
         val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (fineGranted || coarseGranted) {
+            if (!hasLocationPermission) viewModel.onLocationPermissionGranted()
             hasLocationPermission = true
             fusedLocationClient.lastLocation.addOnSuccessListener { location: Location? ->
                 if (location != null) {
@@ -126,6 +135,17 @@ fun TripPlannerScreen(
                     viewModel.setOriginFromGps(-29.4134003, -66.8560292)
                 }
             }
+        }
+    }
+
+    val alertsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.any { it }) {
+            hasLocationPermission = true
+            viewModel.activateTripAlerts()
+        } else {
+            viewModel.onAlertsPermissionDenied()
         }
     }
 
@@ -383,7 +403,7 @@ fun TripPlannerScreen(
                     }
 
                     item {
-                        if (tripAlertsActive) {
+                        if (tripAlertsActive && hasLocationPermission) {
                             StatusPill(
                                 text = "Alertas de proximidad activadas para este viaje",
                                 color = SuccessGreen
@@ -391,7 +411,18 @@ fun TripPlannerScreen(
                         } else {
                             SecondaryButton(
                                 text = "Activar alertas de este viaje",
-                                onClick = { viewModel.activateTripAlerts() },
+                                onClick = {
+                                    if (hasLocationPermission(context)) {
+                                        viewModel.activateTripAlerts()
+                                    } else {
+                                        alertsPermissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                                Manifest.permission.ACCESS_COARSE_LOCATION
+                                            )
+                                        )
+                                    }
+                                },
                                 enabled = !isActivatingAlerts,
                                 icon = Icons.Outlined.NotificationsActive
                             )
@@ -1198,3 +1229,10 @@ fun TripPlanMapView(
     )
 }
 
+private fun hasLocationPermission(context: Context): Boolean =
+    listOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ).any {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }

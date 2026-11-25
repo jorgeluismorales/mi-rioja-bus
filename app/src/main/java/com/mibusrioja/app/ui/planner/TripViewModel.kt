@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -303,6 +304,10 @@ class TripViewModel @Inject constructor(
     fun activateTripAlerts() {
         val plan = _tripPlan.value ?: return
         if (_isActivatingAlerts.value) return
+        if (!geofenceManager.hasLocationPermission()) {
+            onAlertsPermissionDenied()
+            return
+        }
         viewModelScope.launch {
             _isActivatingAlerts.value = true
             val activated = createAutoAlerts(plan)
@@ -318,6 +323,7 @@ class TripViewModel @Inject constructor(
      */
     private suspend fun createAutoAlerts(plan: TripPlan): Int {
         var activated = 0
+        var alreadyActive = false
 
         for ((line, stop) in plan.alertTargets()) {
             val codParada = stop.codParada ?: continue
@@ -327,6 +333,8 @@ class TripViewModel @Inject constructor(
                     if (!existing.activa) {
                         toggleAlertUseCase(existing.id, true)
                         activated++
+                    } else {
+                        alreadyActive = true
                     }
                     continue
                 }
@@ -348,7 +356,7 @@ class TripViewModel @Inject constructor(
             }
         }
 
-        if (activated > 0) {
+        if (activated > 0 || alreadyActive) {
             geofenceManager.startMonitoring()
         }
         return activated
@@ -357,6 +365,17 @@ class TripViewModel @Inject constructor(
     fun clearPlan() {
         _tripPlan.value = null
         _error.value = null
+    }
+
+    /** Sin permiso el servicio de alertas se detiene; al recuperarlo hay que volver a iniciarlo. */
+    fun onLocationPermissionGranted() {
+        viewModelScope.launch {
+            if (getAlertsUseCase().first().any { it.activa }) geofenceManager.startMonitoring()
+        }
+    }
+
+    fun onAlertsPermissionDenied() {
+        _error.value = "Concedé el permiso de ubicación para activar las alertas del viaje"
     }
 
     fun clearError() {
