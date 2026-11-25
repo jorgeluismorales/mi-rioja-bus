@@ -13,6 +13,7 @@ import com.mibusrioja.app.domain.usecase.GetAlertsUseCase
 import com.mibusrioja.app.domain.usecase.GetLinesUseCase
 import com.mibusrioja.app.domain.usecase.GetRouteUseCase
 import com.mibusrioja.app.domain.usecase.ToggleAlertUseCase
+import com.mibusrioja.app.domain.usecase.UpdateAlertDistanceUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,6 +30,7 @@ class AlertViewModel @Inject constructor(
     private val createAlertUseCase: CreateAlertUseCase,
     private val deleteAlertUseCase: DeleteAlertUseCase,
     private val toggleAlertUseCase: ToggleAlertUseCase,
+    private val updateAlertDistanceUseCase: UpdateAlertDistanceUseCase,
     private val getLinesUseCase: GetLinesUseCase,
     private val getRouteUseCase: GetRouteUseCase,
     private val geofenceManager: GeofenceManager
@@ -132,6 +134,16 @@ class AlertViewModel @Inject constructor(
                 deleteAlertUseCase(id)
             } catch (e: Exception) {
                 _error.value = "Error al eliminar alerta: ${e.message}"
+            }
+        }
+    }
+
+    fun updateAlertDistance(id: Long, distanciaMetros: Int) {
+        viewModelScope.launch {
+            try {
+                updateAlertDistanceUseCase(id, distanciaMetros)
+            } catch (e: Exception) {
+                _error.value = "Error al cambiar la distancia: ${e.message}"
             }
         }
     }

@@ -27,6 +27,11 @@ class FindExistingAlertUseCase @Inject constructor(private val repo: AlertReposi
         repo.findExisting(codLinea, codParada)
 }
 
+class UpdateAlertDistanceUseCase @Inject constructor(private val repo: AlertRepository) {
+    suspend operator fun invoke(id: Long, distanciaMetros: Int) =
+        repo.setAlertDistance(id, distanciaMetros)
+}
+
 class ToggleAlertUseCase @Inject constructor(private val repo: AlertRepository) {
     suspend operator fun invoke(id: Long, activa: Boolean) = repo.setAlertActive(id, activa)
 }

@@ -43,6 +43,9 @@ interface AlertDao {
     @Query("UPDATE alerts SET activa = :activa WHERE id = :id")
     suspend fun setActive(id: Long, activa: Boolean)
 
+    @Query("UPDATE alerts SET distanciaMetros = :distanciaMetros WHERE id = :id")
+    suspend fun setDistance(id: Long, distanciaMetros: Int)
+
     // Si hay varias para la misma parada, prioriza la activa: así no se reactiva una pausada duplicada.
     @Query("SELECT * FROM alerts WHERE codLinea = :codLinea AND codParada = :codParada ORDER BY activa DESC LIMIT 1")
     suspend fun findByLineAndStop(codLinea: String, codParada: String): AlertEntity?

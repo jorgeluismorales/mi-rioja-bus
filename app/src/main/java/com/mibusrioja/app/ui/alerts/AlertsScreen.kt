@@ -12,6 +12,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -65,6 +67,7 @@ fun AlertsScreen(
     val error by viewModel.error.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+    var editingAlert by remember { mutableStateOf<Alert?>(null) }
 
     // Pedir permisos de ubicación antes de abrir el sheet de creación
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -160,12 +163,24 @@ fun AlertsScreen(
                                 alert = alert,
                                 lineName = lineNames[alert.codLinea],
                                 onToggle = { activa -> viewModel.toggleAlert(alert.id, activa) },
-                                onDelete = { viewModel.deleteAlert(alert.id) }
+                                onDelete = { viewModel.deleteAlert(alert.id) },
+                                onEditDistance = { editingAlert = alert }
                             )
                         }
                     }
                 }
             }
+        }
+
+        editingAlert?.let { alert ->
+            EditDistanceDialog(
+                currentDistance = alert.distanciaMetros,
+                onDismiss = { editingAlert = null },
+                onConfirm = { meters ->
+                    viewModel.updateAlertDistance(alert.id, meters)
+                    editingAlert = null
+                }
+            )
         }
 
         // Bottom Sheet para crear nueva alerta
@@ -190,6 +205,7 @@ fun AlertCard(
     lineName: String? = null,
     onToggle: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    onEditDistance: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     AppCard(
@@ -271,6 +287,10 @@ fun AlertCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClickLabel = "Editar distancia", onClick = onEditDistance)
+                        .padding(vertical = 6.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
@@ -284,6 +304,12 @@ fun AlertCard(
                         text = "Aviso a ${alert.distanciaMetros}m de la parada",
                         style = MaterialTheme.typography.bodySmall,
                         color = if (alert.activa) TextSecondary else TextMuted
+                    )
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = null,
+                        tint = TextMuted,
+                        modifier = Modifier.size(14.dp)
                     )
                 }
 
@@ -629,50 +655,10 @@ fun CreateAlertBottomSheet(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    val distances = listOf(
-                        50 to "50 metros (Muy cerca)",
-                        100 to "100 metros (Recomendado)",
-                        200 to "200 metros (Con anticipación)",
-                        500 to "500 metros (Distancia amplia)"
+                    DistanceOptions(
+                        selected = selectedDistance,
+                        onSelect = { selectedDistance = it }
                     )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        distances.forEach { (dist, desc) ->
-                            val isSelected = selectedDistance == dist
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selectedDistance = dist },
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isSelected) RiojaOrange.copy(alpha = 0.15f) else SurfaceCard,
-                                border = BorderStroke(
-                                    width = 1.dp,
-                                    color = if (isSelected) RiojaOrange else GlassBorder
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = isSelected,
-                                        onClick = { selectedDistance = dist },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = RiojaOrange,
-                                            unselectedColor = TextMuted
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = desc,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) TextPrimary else TextSecondary
-                                    )
-                                }
-                            }
-                        }
-                    }
 
                     Spacer(modifier = Modifier.height(20.dp))
 
@@ -813,4 +799,86 @@ private fun StepBadge(
             color = if (isCurrent) RiojaOrange else if (isDone) TextPrimary else TextMuted
         )
     }
+}
+
+private val ALERT_DISTANCES = listOf(
+    50 to "50 metros (Muy cerca)",
+    100 to "100 metros (Recomendado)",
+    200 to "200 metros (Con anticipación)",
+    500 to "500 metros (Distancia amplia)"
+)
+
+@Composable
+private fun DistanceOptions(selected: Int, onSelect: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ALERT_DISTANCES.forEach { (dist, desc) ->
+            val isSelected = selected == dist
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(dist) },
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSelected) RiojaOrange.copy(alpha = 0.15f) else SurfaceCard,
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (isSelected) RiojaOrange else GlassBorder
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(
+                        selected = isSelected,
+                        onClick = { onSelect(dist) },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = RiojaOrange,
+                            unselectedColor = TextMuted
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = desc,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) TextPrimary else TextSecondary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditDistanceDialog(
+    currentDistance: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var selected by remember { mutableIntStateOf(currentDistance) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceDark,
+        title = { Text("Distancia de aviso", color = TextPrimary) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    text = "Te avisaremos cuando el colectivo esté a esta distancia de tu parada.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                DistanceOptions(selected = selected, onSelect = { selected = it })
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(selected) },
+                enabled = selected != currentDistance
+            ) { Text("Guardar", color = RiojaOrange) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancelar", color = TextSecondary) }
+        }
+    )
 }

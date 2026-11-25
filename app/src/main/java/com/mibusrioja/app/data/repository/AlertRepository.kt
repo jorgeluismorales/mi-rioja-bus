@@ -24,6 +24,9 @@ class AlertRepository @Inject constructor(
 
     suspend fun setAlertActive(id: Long, activa: Boolean) = alertDao.setActive(id, activa)
 
+    suspend fun setAlertDistance(id: Long, distanciaMetros: Int) =
+        alertDao.setDistance(id, distanciaMetros)
+
     suspend fun updateAlert(alert: AlertEntity) = alertDao.updateAlert(alert)
 
     suspend fun findExisting(codLinea: String, codParada: String): AlertEntity? =
